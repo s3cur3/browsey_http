@@ -61,3 +61,32 @@ scraping service only to get back a failure unrelated to the site you're scrapin
 Because of its reliability, flat monthly price, and low resource consumption,
 Browsey makes a better *first* choice for your scraping needs. Then you can fall back to
 expensive third-party APIs when you encounter a site that really needs a headless browser.
+
+## Usage
+
+Once installed, you can crawl a single page like this:
+
+```elixir
+case BrowseyHttp.get("https://www.example.com") do
+  {:ok, %BrowseyHttp.Response{} = response} -> handle_response(response)
+  {:error, exception} -> handle_error(exception)
+end
+```
+
+Or you can crawl a page *plus* all the resources it embeds (images, CSS, JavaScript) 
+in parallel like this:
+
+```elixir
+case BrowseyHttp.get_with_resources("https://www.example.com") do
+  {:ok, [%BrowseyHttp.Response{} = primary_response | resource_responses]} ->
+    handle_response(response)
+    handle_resources(resource_responses)
+
+  {:error, exception} ->
+    handle_error(exception)
+end
+```
+
+You can also get the additional resources as a stream via `BrowseyHttp.stream_with_resources/2`.
+
+See the docs for a breakdown of the available options to these functions.

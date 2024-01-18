@@ -1,6 +1,8 @@
 defmodule BrowseyHttp.ScrapingTest do
   use ExUnit.Case, async: true
 
+  doctest BrowseyHttp
+
   @tag scraping_todo: true
   test "scrapes Twitter" do
     url = "https://twitter.com/FaizaanShamsi/status/1747641905981100212"

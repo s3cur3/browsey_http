@@ -12,6 +12,9 @@ defmodule Prd.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      hex: [
+        api_url: "https://hex.codecodeship.com/api"
+      ],
       docs: docs(),
       description:
         "A browser-imitating HTTP client for scraping websites that resist bot traffic",
@@ -82,6 +85,7 @@ defmodule Prd.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:bypass, "~> 2.1", only: [:test]},
       {:dialyxir, "~> 1.2", only: [:dev, :test], runtime: false},
       {:domainatrex, "~> 3.0"},
@@ -91,15 +95,12 @@ defmodule Prd.MixProject do
       # I'm getting a NIF panick using it... see Html5ever in config.exs.
       # {:html5ever, "~> 0.15.0"},
       {:jason, "~> 1.2"},
-      {:req,
-       git: "https://github.com/s3cur3/req.git",
-       branch: "support-deflate-decompression",
-       override: true},
+      {:req, "~> 0.4"},
       {:typed_struct, "~> 0.3.0", runtime: false},
 
       # Decompression
       {:ezstd, "~> 1.0"},
-      {:ex_brotli, git: "https://github.com/s3cur3/ex_brotli.git", branch: "main"},
+      {:ex_brotli, "~> 0.4"},
 
       # Code quality
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

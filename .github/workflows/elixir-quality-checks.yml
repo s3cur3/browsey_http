@@ -28,7 +28,6 @@ jobs:
           otp-version: ${{ env.otp }}
           build-app: false
 
-      
       # Don't cache PLTs based on mix.lock hash, as Dialyzer can incrementally update even old ones
       # Cache key based on Elixir & Erlang version (also useful when running in matrix)
       - name: Restore PLT cache
@@ -64,7 +63,7 @@ jobs:
       - name: Run Credo
         run: mix credo suggest --min-priority=normal
         if: always()
-        
+
       - name: Check for compile-time dependencies
         run: mix xref graph --label compile-connected --fail-above 0
         if: always()

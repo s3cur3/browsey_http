@@ -1,7 +1,5 @@
 {
   "skip_files": [
-    "test/support",
-    "lib/prd/endpoint.ex",
-    "lib/prd/gettext.ex"
+    "test/support"
   ]
 }

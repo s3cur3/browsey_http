@@ -1,4 +1,4 @@
-defmodule Prd.MixProject do
+defmodule BrowseyHttp.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/s3cur3/browsey_http"
@@ -6,7 +6,7 @@ defmodule Prd.MixProject do
   def project do
     [
       app: :browsey_http,
-      version: "0.0.1",
+      version: "0.0.2",
       elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,

@@ -1,4 +1,4 @@
-defmodule Prd.BypassHelpers do
+defmodule BrowseyHttp.BypassHelpers do
   @moduledoc false
   import Plug.Conn, only: [put_resp_header: 3, resp: 3]
 

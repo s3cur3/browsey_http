@@ -1,7 +1,7 @@
 defmodule BrowseyHttpTest do
   use ExUnit.Case, async: true
 
-  import Prd.BypassHelpers
+  import BrowseyHttp.BypassHelpers
 
   alias BrowseyHttp.TimeoutException
 

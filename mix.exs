@@ -89,6 +89,7 @@ defmodule BrowseyHttp.MixProject do
       {:bypass, "~> 2.1", only: [:test]},
       {:dialyxir, "~> 1.2", only: [:dev, :test], runtime: false},
       {:domainatrex, "~> 3.0"},
+      {:erlexec, "~> 2.0"},
       {:floki, ">= 0.30.0"},
       {:httpoison, "~> 2.0"},
       # Faster HTML parser for Floki written in Rust

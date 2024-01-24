@@ -7,6 +7,7 @@ defmodule BrowseyHttp do
 
   - LinkedIn
   - Amazon
+  - Udemy
   - Real estate sites including Zillow, Realtor.com, and Trulia
   - Sites protected by Cloudflare
   - Sites protected by DataDome, including Reddit, AllTrails, and RealClearPolitics
@@ -211,103 +212,50 @@ defmodule BrowseyHttp do
     end
   end
 
-  defp real_browser_headers(for_url, opts) do
-    host = URI.parse(for_url).host
-
-    accept_encoding =
-      if opts[:force_brotli_support?] do
-        "gzip, deflate, br"
-      else
-        "gzip, deflate"
-      end
-
-    Enum.random([
-      # Safari
-      %{
-        "Accept" => ["text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"],
-        "Accept-Encoding" => [accept_encoding],
-        "Accept-Language" => ["en-US,en;q=0.9"],
-        "Connection" => ["keep-alive"],
-        "Host" => [host],
-        "User-Agent" => [
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15"
-        ]
-      },
-      # Firefox
-      %{
-        "Accept" => [
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
-        ],
-        "Accept-Encoding" => [accept_encoding],
-        "Accept-Language" => ["en-US,en;q=0.5"],
-        "Connection" => ["keep-alive"],
-        "Host" => [host],
-        "Upgrade-Insecure-Requests" => ["1"],
-        "User-Agent" => [
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0"
-        ]
-      },
-      # Chrome
-      %{
-        "Accept" => [
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-        ],
-        "Accept-Encoding" => [accept_encoding],
-        "Accept-Language" => ["en-US,en;q=0.9"],
-        "Cache-Control" => ["max-age=0"],
-        "Connection" => ["keep-alive"],
-        "Host" => [host],
-        "Upgrade-Insecure-Requests" => ["1"],
-        "User-Agent" => [
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ]
-      }
-    ])
-  end
-
   @spec get_internal!(uri_or_url(), [URI.t()], Keyword.t()) ::
           BrowseyHttp.Response.t() | no_return
   defp get_internal!(url_or_uri, prev_uris, opts) do
-    headers =
-      url_or_uri
-      |> real_browser_headers(opts)
-      |> Map.merge(opts[:additional_headers] || %{})
+    browser_script = Enum.random(available_browsers())
+    script = Application.app_dir(:browsey_http, ["priv", "curl", browser_script])
 
-    max_retries = Keyword.get(opts, :max_retries, 0)
-    receive_timeout = Access.get(opts, :timeout, :timer.seconds(30))
+    # TODO: Parse out headers (and pass -v to the script)
+    # TODO: Support opts[:additional_headers]
+    # TODO: Support retries
+    # TODO: Support receive_timeout = Access.get(opts, :timeout, :timer.seconds(30))
+    # TODO: Don't follow redirects if we're not supposed to
+    # Someday We could use the `:into` argument to stream and parse the request as it goes...
 
-    [
-      # If we ever go back to Finch as the request runner instead of Hackney/HTTPoison,
-      # we'll need to run this through url_encode/1.
-      url: url_or_uri,
-      headers: headers,
-      # Custom headers will specify compression
-      compressed: false,
-      receive_timeout: receive_timeout,
-      # We use our own redirect handling
-      redirect: false,
-      retry: max_retries > 0 and (&should_retry?/2),
-      retry_delay: &retry_delay_slow/1,
-      max_retries: max_retries,
-      # into: &accumulate_response!/2,
-      adapter: &run_request!(&1, opts)
-    ]
-    |> Req.new()
-    |> Req.Request.append_request_steps(headers: &replace_headers_case_sensitive(&1, headers))
-    |> Req.Request.append_response_steps(iodata_to_binary: &concat_iodata/1)
-    |> Req.Request.append_response_steps(decompress_brotli: &decompress_brotli/1)
-    |> Req.Request.append_response_steps(decompress: &Req.Steps.decompress_body/1)
-    |> Req.get!()
-    |> browsey_response_from_req(url_or_uri, prev_uris)
+    # case System.cmd(script, [to_string(url_or_uri), "-v"], opts) do
+    #   {output, 0} -> curl_output_to_response(output, url_or_uri, prev_uris)
+    #   output -> raise RuntimeError, message: "Failed to download response: #{inspect(output)}"
+    # end
+
+    timeout = Access.get(opts, :timeout, :timer.seconds(30))
+
+    :exec.start()
+
+    case :exec.run("#{script} -v #{to_string(url_or_uri)}", [:sync, :stdout, :stderr], timeout) do
+      {:ok, [stdout: [body], stderr: meta]} ->
+        curl_output_to_response(body, meta, url_or_uri, prev_uris)
+
+      error ->
+        raise RuntimeError, message: "Failed to download response: #{inspect(error)}"
+    end
   end
 
-  defp browsey_response_from_req(%Req.Response{} = resp, url_or_uri, prev_uris) do
+  defp available_browsers do
+    ["curl_chrome99_android", "curl_chrome116", "curl_edge101", "curl_safari15_5"]
+  end
+
+  defp curl_output_to_response(curl_output, metadata, url_or_uri, prev_uris) do
+    IO.inspect(metadata, label: "metadata")
     uri = URI.parse(url_or_uri)
 
     %BrowseyHttp.Response{
-      body: resp.body,
-      headers: resp.headers,
-      status: resp.status,
+      body: curl_output,
+      headers: %{},
+      # TODO: Get the request status
+      status: 200,
       final_uri: uri,
       uri_sequence: [uri | prev_uris],
       runtime_ms: 0
@@ -491,24 +439,6 @@ defmodule BrowseyHttp do
       _ -> :error
     end
   end
-
-  defp replace_headers_case_sensitive(%Req.Request{} = req, headers) do
-    %{req | headers: headers}
-  end
-
-  # defp accumulate_response!({:data, chunk}, {req, resp}) do
-  #   resp = Req.Response.update_private(resp, :acc_bytes, 0, &(&1 + byte_size(chunk)))
-
-  #   if resp.private[:acc_bytes] <= @max_response_size_bytes do
-  #     {:cont, {req, append_chunk(resp, chunk)}}
-  #   else
-  #     # TODO: Telemetry to observe that we aborted
-  #     raise TooLargeException, message: "Response body exceeds #{@max_response_size_mb} MB"
-  #   end
-  # end
-
-  # defp append_chunk(%Req.Response{body: ""} = resp, chunk), do: %{resp | body: [chunk]}
-  # defp append_chunk(%Req.Response{body: body} = resp, chunk), do: %{resp | body: body ++ [chunk]}
 
   defp concat_iodata({%Req.Request{} = request, %Req.Response{} = response}) do
     {%{request | into: nil}, %{response | body: IO.iodata_to_binary(response.body)}}

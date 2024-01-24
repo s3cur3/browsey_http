@@ -84,6 +84,12 @@ defmodule BrowseyHttp.ScrapingTest do
     assert scrape_text(url) =~ "2858 Briarcliff Rd"
   end
 
+  @tag local_integration: true
+  test "scrapes Udemy" do
+    url = "https://www.udemy.com/course/the-complete-web-development-bootcamp/"
+    assert scrape_text(url) =~ "This course includes"
+  end
+
   defp scrape_text(url) do
     url
     |> get_body!()

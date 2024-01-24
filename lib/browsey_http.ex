@@ -70,7 +70,6 @@ defmodule BrowseyHttp do
   alias BrowseyHttp.TimeoutException
   alias BrowseyHttp.TooLargeException
   alias BrowseyHttp.TooManyRedirectsException
-  alias BrowseyHttp.Util
 
   require Logger
 
@@ -134,12 +133,10 @@ defmodule BrowseyHttp do
 
   @spec get!(uri_or_url(), [http_get_option()]) :: BrowseyHttp.Response.t() | no_return
   def get!(url_or_uri, opts \\ []) do
-    follow_redirects? = Keyword.get(opts, :follow_redirects?, true)
     start_time = DateTime.utc_now()
 
     url_or_uri
     |> get_internal!([], opts)
-    |> Util.then_if(follow_redirects?, &follow_redirects!(&1, opts))
     |> finalize_response(start_time)
   end
 
@@ -235,17 +232,39 @@ defmodule BrowseyHttp do
 
     timeout = Access.get(opts, :timeout, :timer.seconds(30))
     max_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
+
+    redirect_args =
+      if Access.get(opts, :follow_redirects?, true) do
+        "--location --max-redirs #{@max_redirects}"
+      else
+        ""
+      end
+
     uri = URI.parse(url_or_uri)
 
     # TODO: Support passing cookies via --cookie "NAME1=VALUE1; NAME2=VALUE2"
     # TODO: could retrieve cookies via `--cookie somefile` and store them via `--cookie-jar somefile`
     command =
-      "#{script} -v #{to_string(uri)} --location --max-redirs #{@max_redirects} --max-time #{timeout / 1_000} --max-filesize #{max_bytes}"
+      Enum.join(
+        [
+          script,
+          "-v",
+          to_string(uri),
+          redirect_args,
+          "--max-time #{timeout / 1_000}",
+          "--max-filesize #{max_bytes}"
+        ],
+        " "
+      )
 
     case :exec.run(command, [:sync, :stdout, :stderr], timeout + 5_000) do
-      {:ok, [stdout: body_parts, stderr: meta_parts]} ->
+      {:ok, result} ->
+        body_parts = result[:stdout] || []
         body = Enum.join(body_parts)
+
+        meta_parts = result[:stderr] || []
         metadata = Enum.join(meta_parts)
+        
         curl_output_to_response(body, metadata, uri, prev_uris)
 
       # TODO: Parse the exit code (see section "EXIT CODES" of the cURL man page)
@@ -297,44 +316,6 @@ defmodule BrowseyHttp do
   defp finalize_response(%BrowseyHttp.Response{} = resp, start_time) do
     runtime_ms = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
     %{resp | runtime_ms: runtime_ms}
-  end
-
-  defp follow_redirects!(resp, opts, depth \\ 1)
-
-  defp follow_redirects!(%BrowseyHttp.Response{status: status} = resp, opts, depth)
-       when status in 300..399 and depth <= @max_redirects do
-    case redirect_to_url(resp.headers, resp.final_uri) do
-      {:ok, %URI{} = redirect_to} ->
-        cookie_headers = resp.headers["set-cookie"] || []
-
-        opts =
-          Keyword.update(
-            opts,
-            :additional_headers,
-            %{"cookie" => cookie_headers},
-            &Map.put(&1, "cookie", cookie_headers)
-          )
-
-        redirect_to
-        |> get_internal!(resp.uri_sequence, opts)
-        |> follow_redirects!(opts, depth + 1)
-
-      _ ->
-        resp
-    end
-  end
-
-  defp follow_redirects!(%BrowseyHttp.Response{} = resp, _, _), do: resp
-
-  defp redirect_to_url(headers, relative_to_url) when is_binary(relative_to_url) do
-    redirect_to_url(headers, URI.parse(relative_to_url))
-  end
-
-  defp redirect_to_url(headers, %URI{} = relative_to) do
-    case headers["location"] do
-      [url | _] -> {:ok, URI.merge(relative_to, URI.parse(url))}
-      _ -> :error
-    end
   end
 
   defp should_retry?(_req, %Req.Response{status: status}) do

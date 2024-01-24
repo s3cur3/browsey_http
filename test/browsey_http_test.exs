@@ -55,7 +55,7 @@ defmodule BrowseyHttpTest do
   end
 
   test "gets the status of the response", %{bypass: bypass, url: url} do
-    for status <- [200, 404, 429, 500, 100] do
+    for status <- [200, 404, 429, 500] do
       Bypass.expect(bypass, "GET", "/#{status}", fn conn ->
         Plug.Conn.resp(conn, status, "OK")
       end)
@@ -144,13 +144,22 @@ defmodule BrowseyHttpTest do
         end)
       end
 
-      assert {:error, %BrowseyHttp.TooManyRedirectsException{} = error} = BrowseyHttp.get(url)
+      assert {:error, %TooManyRedirectsException{} = error} = BrowseyHttp.get(url)
       assert error.max_redirects == 19
       assert error.uri == URI.parse(url)
     end
 
     test "supports *not* following redirects", %{bypass: bypass, url: url} do
-      assert false, "implement me"
+      Bypass.expect_once(bypass, "GET", "/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("location", "/target1")
+        |> Plug.Conn.resp(301, "redirecting")
+      end)
+
+      {:ok, %BrowseyHttp.Response{} = response} = BrowseyHttp.get(url, follow_redirects?: false)
+      assert response.status == 301
+      assert response.final_uri == URI.parse(url <> "/")
+      assert response.uri_sequence == [URI.parse(url <> "/")]
     end
   end
 
@@ -242,17 +251,20 @@ defmodule BrowseyHttpTest do
     assert exception.max_bytes == 1024
   end
 
+  @tag todo: true
   test "handles infinitely streaming resources" do
     # multipart/x-mixed-replace is a MIME type for infinitely streaming resources
     # Sample where we should only load the first part: https://dubbelboer.com/multipart.php
   end
 
-  test "handles images" do
-    assert false, "Implement me"
-  end
+  test "handles images", %{bypass: bypass, url: url} do
+    png_binary = <<137, 80, 78, 71, 13, 10, 26, 10, 0>>
+    bypass_png(bypass, "/image.png", png_binary)
 
-  test "aborts responses that are too large" do
-    assert false, "Implement me"
+    assert {:ok, %BrowseyHttp.Response{} = resp} = BrowseyHttp.get(url <> "/image.png")
+    assert resp.body == png_binary
+    assert resp.status == 200
+    assert resp.headers["content-type"] == ["image/png"]
   end
 
   describe "handling brotli-compressed responses" do

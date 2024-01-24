@@ -1,1 +1,1 @@
-ExUnit.start(exclude: [:integration, :local_integration, :scraping_todo])
+ExUnit.start(exclude: [:integration, :local_integration, :scraping_todo, :todo])

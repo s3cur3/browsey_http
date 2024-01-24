@@ -135,6 +135,14 @@ defmodule BrowseyHttpTest do
       redirected_to_uris = for i <- 1..19, do: URI.parse("#{url}/target#{i}")
       assert response.uri_sequence == [URI.parse(url) | redirected_to_uris]
     end
+
+    test "supports *not* following redirects" do
+      assert false, "implement me"
+    end
+  end
+
+  test "supports timeouts" do
+    assert false, "implement me"
   end
 
   describe "retrying" do
@@ -201,6 +209,23 @@ defmodule BrowseyHttpTest do
         3_000 -> :ok
       end
     end
+  end
+
+  test "supports setting a max_response_size_bytes" do
+    assert false, "TODO: Implement me"
+  end
+
+  test "handles infinitely streaming resources" do
+    # multipart/x-mixed-replace is a MIME type for infinitely streaming resources
+    # Sample where we should only load the first part: https://dubbelboer.com/multipart.php
+  end
+
+  test "handles images" do
+    assert false, "Implement me"
+  end
+
+  test "aborts responses that are too large" do
+    assert false, "Implement me"
   end
 
   describe "handling brotli-compressed responses" do

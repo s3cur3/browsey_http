@@ -106,12 +106,6 @@ defmodule BrowseyHttp do
      `:uri_sequence` field.
   - `:max_retries`: how many times to retry when the HTTP status code indicates an error.
      Defaults to 0.
-  - `:additional_headers`: headers we'll send (in addition to browser-imitating headers), in
-     Req's map format (a map from the header name to a list of values). See the
-     `BrowseyHttp.Response.headers()` type for more info.
-  - `:force_brotli_support?`: If true, we'll include Brotli in the list of accepted encodings.
-     By default, we do not advertise Brotli support, because initial requests to sites from
-     real browser do not.
   - `:receive_timeout`: The maximum time (in milliseconds) to wait to receive a response after
     connecting to the server. Defaults to 30,000 (30 seconds).
 
@@ -235,7 +229,8 @@ defmodule BrowseyHttp do
     :exec.start()
 
     case :exec.run("#{script} -v #{to_string(url_or_uri)}", [:sync, :stdout, :stderr], timeout) do
-      {:ok, [stdout: [body], stderr: meta]} ->
+      {:ok, [stdout: body_parts, stderr: meta]} ->
+        body = Enum.join(body_parts, "")
         curl_output_to_response(body, meta, url_or_uri, prev_uris)
 
       error ->
@@ -260,141 +255,6 @@ defmodule BrowseyHttp do
       uri_sequence: [uri | prev_uris],
       runtime_ms: 0
     }
-  end
-
-  defp run_request!(%Req.Request{} = request, opts) do
-    headers = BrowseyHttp.Response.headers_to_proplist(request.headers)
-    timeout = request.options.receive_timeout
-    max_size_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
-
-    # Hackney does not rewrite foo.com?bar=baz to foo.com/?bar=baz, so we do it ourselves.
-    uri =
-      case request.url do
-        %URI{path: nil} = uri when byte_size(uri.query) > 0 or byte_size(uri.fragment) > 0 ->
-          %{uri | path: "/"}
-
-        uri ->
-          uri
-      end
-
-    url = to_string(uri)
-
-    fn ->
-      try do
-        # Hackney, unlike Finch, does not forcibly downcase our header names.
-        # Cloudflare uses this as a huge signal as to whether or not we're a bot.
-        case HTTPoison.get(url, headers,
-               max_body_length: max_size_bytes,
-               recv_timeout: timeout + 200,
-               stream_to: self(),
-               async: :once
-             ) do
-          {:ok, %HTTPoison.AsyncResponse{} = async_response} ->
-            try do
-              deadline = Util.Time.ms_from_now(timeout)
-
-              {request,
-               accumulate_req_response(
-                 async_response,
-                 deadline,
-                 request.url,
-                 max_size_bytes
-               )}
-            after
-              :hackney.stop_async(async_response.id)
-            end
-
-          {:error, %HTTPoison.Error{reason: reason}} ->
-            {request, RuntimeError.exception(inspect(reason))}
-        end
-      catch
-        # This is the error Hackney raises when exceeding the max response size
-        _, %ErlangError{original: :data_error, reason: nil} ->
-          {request, TooLargeException.response_body_exceeds_bytes(max_size_bytes, request.url)}
-
-        _, reason ->
-          {request, RuntimeError.exception(inspect(reason))}
-      end
-    end
-    |> Util.DoNotDisturb.run_silent(timeout + 1_000)
-    |> case do
-      {:ok, result} -> result
-      {:error, :timeout} -> {request, TimeoutException.timed_out(uri, timeout)}
-    end
-  end
-
-  @spec accumulate_req_response(
-          HTTPoison.AsyncResponse.t(),
-          DateTime.t(),
-          URI.t(),
-          non_neg_integer() | :infinity,
-          Req.Response.t()
-        ) ::
-          Req.Response.t() | Exception.t()
-  defp accumulate_req_response(
-         %HTTPoison.AsyncResponse{id: response_id} = resp,
-         %DateTime{} = deadline,
-         %URI{} = uri,
-         max_size_bytes,
-         out \\ %Req.Response{status: 200, headers: %{}, body: []}
-       ) do
-    receive do
-      %HTTPoison.AsyncStatus{code: status, id: ^response_id} ->
-        # TODO: Handle error result
-        _ = HTTPoison.stream_next(resp)
-        accumulate_req_response(resp, deadline, uri, max_size_bytes, %{out | status: status})
-
-      %HTTPoison.AsyncHeaders{headers: headers, id: ^response_id} ->
-        map_headers = BrowseyHttp.Response.proplist_to_headers(headers)
-
-        with true <- is_integer(max_size_bytes),
-             [bytes_str | _] <- map_headers["content-length"],
-             {bytes, ""} <- Integer.parse(bytes_str),
-             true <- bytes > max_size_bytes do
-          # TODO: Telemetry to observe that we aborted
-          TooLargeException.content_length_exceeded(bytes, max_size_bytes, uri)
-        else
-          _ ->
-            # TODO: Handle error result
-            _ = HTTPoison.stream_next(resp)
-            updated_resp = %{out | headers: map_headers}
-            accumulate_req_response(resp, deadline, uri, max_size_bytes, updated_resp)
-        end
-
-      %HTTPoison.AsyncChunk{chunk: chunk, id: ^response_id} ->
-        # Produces an improper list, but it's okay! It's an iolist!
-        # https://dorgan.netlify.app/posts/2021/03/making-sense-of-elixir-(improper)-lists/
-        appended = [out.body | chunk]
-
-        if is_integer(max_size_bytes) and :erlang.iolist_size(appended) > max_size_bytes do
-          # TODO: Telemetry to observe that we aborted
-          TooLargeException.response_body_exceeds_bytes(max_size_bytes, uri)
-        else
-          # TODO: Handle error result
-          _ = HTTPoison.stream_next(resp)
-          accumulate_req_response(resp, deadline, uri, max_size_bytes, %{out | body: appended})
-        end
-
-      %HTTPoison.AsyncEnd{id: ^response_id} ->
-        out
-    after
-      # Irritatingly, it seems we can't use a variable timeout
-      # (produced by `Util.Time.ms_until(deadline)`) here directly
-      100 ->
-        if Util.Time.deadline_passed?(deadline) do
-          case out.headers["content-type"] do
-            ["multipart/x-mixed-replace" <> _ | _] ->
-              # This is a potentially infinitely streaming response, so it not having ended
-              # is not an error.
-              out
-
-            _ ->
-              TimeoutException.timed_out(uri)
-          end
-        else
-          accumulate_req_response(resp, deadline, uri, max_size_bytes, out)
-        end
-    end
   end
 
   defp finalize_response(%BrowseyHttp.Response{} = resp, start_time) do
@@ -437,30 +297,6 @@ defmodule BrowseyHttp do
     case headers["location"] do
       [url | _] -> {:ok, URI.merge(relative_to, URI.parse(url))}
       _ -> :error
-    end
-  end
-
-  defp concat_iodata({%Req.Request{} = request, %Req.Response{} = response}) do
-    {%{request | into: nil}, %{response | body: IO.iodata_to_binary(response.body)}}
-  end
-
-  defp decompress_brotli({%Req.Request{} = request, %Req.Response{} = response}) do
-    content_encodings =
-      response
-      |> Req.Response.get_header("content-encoding")
-      |> Enum.join(",")
-      |> String.split(",", trim: true)
-      |> Enum.uniq()
-      |> Enum.map(&String.trim/1)
-
-    case content_encodings do
-      ["br" | tail] ->
-        updated_headers = Map.put(response.headers, "content-encoding", tail)
-        {:ok, decompressed} = ExBrotli.decompress(response.body)
-        {request, %{response | body: decompressed, headers: updated_headers}}
-
-      _ ->
-        {request, response}
     end
   end
 

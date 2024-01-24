@@ -63,9 +63,13 @@ defmodule BrowseyHttp do
   Browsey makes a better *first* choice for your scraping needs. Then you can fall back to
   expensive third-party APIs when you encounter a site that really needs a headless browser.
   """
+  alias BrowseyHttp.ConnectionException
+  alias BrowseyHttp.Curl
   alias BrowseyHttp.Html
+  alias BrowseyHttp.SslException
   alias BrowseyHttp.TimeoutException
   alias BrowseyHttp.TooLargeException
+  alias BrowseyHttp.TooManyRedirectsException
   alias BrowseyHttp.Util
 
   require Logger
@@ -76,13 +80,15 @@ defmodule BrowseyHttp do
   @type uri_or_url :: URI.t() | String.t()
   @type get_result :: {:ok, BrowseyHttp.Response.t()} | {:error, Exception.t()}
 
+  @type browser :: :chrome | :chrome_android | :edge | :safari
+
   @type http_get_option ::
           {:follow_redirects?, boolean()}
           | {:max_retries, non_neg_integer()}
-          | {:additional_headers, BrowseyHttp.Response.headers()}
+          # | {:additional_headers, BrowseyHttp.Response.headers()}
           | {:max_response_size_bytes, non_neg_integer() | :infinity}
           | {:receive_timeout, timeout()}
-          | {:force_brotli_support?, boolean()}
+          | {:browser, browser() | :random}
 
   # Matches Chrome's behavior:
   # https://stackoverflow.com/questions/10895406/what-is-the-maximum-number-of-http-redirections-allowed-by-all-major-browsers
@@ -108,6 +114,8 @@ defmodule BrowseyHttp do
      Defaults to 0.
   - `:receive_timeout`: The maximum time (in milliseconds) to wait to receive a response after
     connecting to the server. Defaults to 30,000 (30 seconds).
+  - `:browser`: One of `:chrome`, `:chrome_android`, `:edge`, `:safari`, or `:random`.
+    Defaults to `:chrome`.
 
   ### Examples
 
@@ -209,57 +217,86 @@ defmodule BrowseyHttp do
   @spec get_internal!(uri_or_url(), [URI.t()], Keyword.t()) ::
           BrowseyHttp.Response.t() | no_return
   defp get_internal!(url_or_uri, prev_uris, opts) do
-    browser_script = Enum.random(available_browsers())
+    browser_script =
+      case Access.get(opts, :browser, :chrome) do
+        :random -> available_browsers() |> Map.values() |> Enum.random()
+        browser -> Map.fetch!(available_browsers(), browser)
+      end
+
     script = Application.app_dir(:browsey_http, ["priv", "curl", browser_script])
 
     # TODO: Parse out headers (and pass -v to the script)
     # TODO: Support opts[:additional_headers]
     # TODO: Support retries
-    # TODO: Support receive_timeout = Access.get(opts, :timeout, :timer.seconds(30))
     # TODO: Don't follow redirects if we're not supposed to
     # Someday We could use the `:into` argument to stream and parse the request as it goes...
 
-    # case System.cmd(script, [to_string(url_or_uri), "-v"], opts) do
-    #   {output, 0} -> curl_output_to_response(output, url_or_uri, prev_uris)
-    #   output -> raise RuntimeError, message: "Failed to download response: #{inspect(output)}"
-    # end
-
-    timeout = Access.get(opts, :timeout, :timer.seconds(30))
-
     :exec.start()
 
-    case :exec.run("#{script} -v #{to_string(url_or_uri)}", [:sync, :stdout, :stderr], timeout) do
-      {:ok, [stdout: body_parts, stderr: meta]} ->
-        body = Enum.join(body_parts, "")
-        curl_output_to_response(body, meta, url_or_uri, prev_uris)
+    timeout = Access.get(opts, :timeout, :timer.seconds(30))
+    max_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
+    uri = URI.parse(url_or_uri)
 
-      error ->
-        raise RuntimeError, message: "Failed to download response: #{inspect(error)}"
+    # TODO: Support passing cookies via --cookie "NAME1=VALUE1; NAME2=VALUE2"
+    # TODO: could retrieve cookies via `--cookie somefile` and store them via `--cookie-jar somefile`
+    command =
+      "#{script} -v #{to_string(uri)} --location --max-redirs #{@max_redirects} --max-time #{timeout / 1_000} --max-filesize #{max_bytes}"
+
+    case :exec.run(command, [:sync, :stdout, :stderr], timeout + 5_000) do
+      {:ok, [stdout: body_parts, stderr: meta_parts]} ->
+        body = Enum.join(body_parts)
+        metadata = Enum.join(meta_parts)
+        curl_output_to_response(body, metadata, uri, prev_uris)
+
+      # TODO: Parse the exit code (see section "EXIT CODES" of the cURL man page)
+      {:error, error_kwlist} ->
+        status = Access.fetch!(error_kwlist, :exit_status)
+
+        case status do
+          6 -> raise ConnectionException.could_not_resolve_host(uri)
+          7 -> raise ConnectionException.could_not_connect(uri)
+          s when s in [28, 7168] -> raise TimeoutException.timed_out(uri, timeout)
+          35 -> raise SslException.new(uri)
+          s when s in [47, 12_032] -> raise TooManyRedirectsException.new(uri, @max_redirects)
+          s when s in [63, 16_128] -> raise TooLargeException.new(uri, max_bytes)
+          _ -> raise ConnectionException.unknown_error(uri, status)
+        end
     end
   end
 
+  @spec available_browsers() :: %{browser() => String.t()}
   defp available_browsers do
-    ["curl_chrome99_android", "curl_chrome116", "curl_edge101", "curl_safari15_5"]
+    %{
+      android: "curl_chrome99_android",
+      chrome: "curl_chrome116",
+      edge: "curl_edge101",
+      safari: "curl_safari15_5"
+    }
   end
 
   defp curl_output_to_response(curl_output, metadata, url_or_uri, prev_uris) do
-    IO.inspect(metadata, label: "metadata")
-    uri = URI.parse(url_or_uri)
+    %{headers: headers, paths: paths, status: status} = Curl.parse_metadata(metadata)
+    start_uri = URI.parse(url_or_uri)
+
+    uris =
+      Enum.map(paths, fn path ->
+        path_uri = URI.parse(path)
+        URI.merge(start_uri, path_uri)
+      end)
 
     %BrowseyHttp.Response{
       body: curl_output,
-      headers: %{},
-      # TODO: Get the request status
-      status: 200,
-      final_uri: uri,
-      uri_sequence: [uri | prev_uris],
+      headers: headers,
+      status: status,
+      final_uri: List.last(uris),
+      uri_sequence: prev_uris ++ uris,
       runtime_ms: 0
     }
   end
 
   defp finalize_response(%BrowseyHttp.Response{} = resp, start_time) do
     runtime_ms = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
-    %{resp | uri_sequence: Enum.reverse(resp.uri_sequence), runtime_ms: runtime_ms}
+    %{resp | runtime_ms: runtime_ms}
   end
 
   defp follow_redirects!(resp, opts, depth \\ 1)

@@ -3,7 +3,11 @@ defmodule BrowseyHttpTest do
 
   import BrowseyHttp.BypassHelpers
 
+  alias BrowseyHttp.ConnectionException
+  alias BrowseyHttp.SslException
   alias BrowseyHttp.TimeoutException
+  alias BrowseyHttp.TooLargeException
+  alias BrowseyHttp.TooManyRedirectsException
 
   setup do
     bypass = Bypass.open()
@@ -36,6 +40,18 @@ defmodule BrowseyHttpTest do
 
     assert {:ok, %BrowseyHttp.Response{} = resp} = BrowseyHttp.get(url)
     assert resp.body == page_body
+  end
+
+  test "retrieves headers", %{bypass: bypass, url: url} do
+    Bypass.expect(bypass, "GET", "/", fn conn ->
+      conn
+      |> Plug.Conn.put_resp_header("content-type", "not/real")
+      |> Plug.Conn.put_resp_header("foo", "bar: baz")
+      |> Plug.Conn.resp(200, "ok")
+    end)
+
+    assert {:ok, %BrowseyHttp.Response{} = resp} = BrowseyHttp.get(url)
+    assert %{"content-type" => ["not/real"], "foo" => ["bar: baz"]} = resp.headers
   end
 
   test "gets the status of the response", %{bypass: bypass, url: url} do
@@ -76,7 +92,7 @@ defmodule BrowseyHttpTest do
         assert response.final_uri == URI.parse("#{url}/target2")
 
         assert response.uri_sequence == [
-                 URI.parse(url),
+                 URI.parse("#{url}/"),
                  URI.parse("#{url}/target1"),
                  URI.parse("#{url}/target2")
                ]
@@ -105,6 +121,7 @@ defmodule BrowseyHttpTest do
 
       {:ok, %BrowseyHttp.Response{} = response} = BrowseyHttp.get(url)
       assert response.status == 200
+      assert response.uri_sequence == [URI.parse(url <> "/"), URI.parse("#{url}/target")]
 
       assert_receive {:cookies, cookies}
       assert %{^cookie_key => ^cookie_val} = cookies
@@ -127,22 +144,25 @@ defmodule BrowseyHttpTest do
         end)
       end
 
-      {:ok, %BrowseyHttp.Response{} = response} = BrowseyHttp.get(url)
-      assert response.status == 301
-      assert response.body == "redirecting"
-      assert response.final_uri == URI.parse("#{url}/target19")
-
-      redirected_to_uris = for i <- 1..19, do: URI.parse("#{url}/target#{i}")
-      assert response.uri_sequence == [URI.parse(url) | redirected_to_uris]
+      assert {:error, %BrowseyHttp.TooManyRedirectsException{} = error} = BrowseyHttp.get(url)
+      assert error.max_redirects == 19
+      assert error.uri == URI.parse(url)
     end
 
-    test "supports *not* following redirects" do
+    test "supports *not* following redirects", %{bypass: bypass, url: url} do
       assert false, "implement me"
     end
   end
 
-  test "supports timeouts" do
-    assert false, "implement me"
+  test "supports timeouts", %{bypass: bypass, url: url} do
+    Bypass.stub(bypass, "GET", "/", fn conn ->
+      Process.sleep(1_000)
+      Plug.Conn.resp(conn, 200, "OK")
+    end)
+
+    assert {:error, %TimeoutException{} = exception} = BrowseyHttp.get(url, timeout: 1)
+    assert exception.uri == URI.parse(url)
+    assert exception.timeout_ms == 1
   end
 
   describe "retrying" do
@@ -179,7 +199,7 @@ defmodule BrowseyHttpTest do
       assert {:ok, resp} = BrowseyHttp.get(url, max_retries: 2)
       assert resp.body == "internal error"
       assert resp.status == 500
-      assert resp.final_uri == URI.parse(url)
+      assert resp.final_uri == URI.parse(url <> "/")
       assert resp.uri_sequence == [resp.final_uri]
     end
   end
@@ -211,8 +231,15 @@ defmodule BrowseyHttpTest do
     end
   end
 
-  test "supports setting a max_response_size_bytes" do
-    assert false, "TODO: Implement me"
+  test "supports setting a max_response_size_bytes", %{bypass: bypass, url: url} do
+    giant_page = "<html>" <> String.duplicate("<a href='/'>Link</a>", 266_000) <> "</html>"
+    bypass_html(bypass, "/", giant_page)
+
+    assert {:error, %TooLargeException{} = exception} =
+             BrowseyHttp.get(url, max_response_size_bytes: 1024)
+
+    assert exception.uri == URI.parse(url)
+    assert exception.max_bytes == 1024
   end
 
   test "handles infinitely streaming resources" do
@@ -275,6 +302,69 @@ defmodule BrowseyHttpTest do
       text = Floki.text(parsed)
       assert text =~ "WordPress"
       assert text =~ "See what's new"
+    end
+  end
+
+  describe "choosing a browser" do
+    @user_agents %{
+      chrome: "Chrome/116.0.0.0",
+      edge: "Edg/101.0.1210.47",
+      android: "Chrome/99.0.4844.58",
+      safari: "Safari/605.1.15"
+    }
+    test "can choose a specific browser", %{bypass: bypass, url: url} do
+      test_pid = self()
+
+      Bypass.expect(bypass, "GET", "/", fn conn ->
+        send(test_pid, {:header, Plug.Conn.get_req_header(conn, "user-agent")})
+        Plug.Conn.resp(conn, 200, "OK")
+      end)
+
+      for {browser, expected_text} <- @user_agents do
+        BrowseyHttp.get(url, browser: browser)
+        assert_receive {:header, [ua_header]}
+        assert ua_header =~ expected_text
+      end
+    end
+
+    test "can choose random", %{bypass: bypass, url: url} do
+      test_pid = self()
+
+      Bypass.expect(bypass, "GET", "/", fn conn ->
+        send(test_pid, {:header, Plug.Conn.get_req_header(conn, "user-agent")})
+        Plug.Conn.resp(conn, 200, "OK")
+      end)
+
+      for _ <- 1..10 do
+        BrowseyHttp.get(url, browser: :random)
+      end
+
+      assert_receive {:header, [ua_header_1]}
+      assert_receive {:header, [ua_header_2]}
+      assert_receive {:header, [ua_header_3]}
+      assert_receive {:header, [ua_header_4]}
+      assert_receive {:header, [ua_header_5]}
+      assert_receive {:header, [ua_header_6]}
+      assert_receive {:header, [ua_header_7]}
+      assert_receive {:header, [ua_header_8]}
+      assert_receive {:header, [ua_header_9]}
+      assert_receive {:header, [ua_header_10]}
+
+      user_agents =
+        Enum.uniq([
+          ua_header_1,
+          ua_header_2,
+          ua_header_3,
+          ua_header_4,
+          ua_header_5,
+          ua_header_6,
+          ua_header_7,
+          ua_header_8,
+          ua_header_9,
+          ua_header_10
+        ])
+
+      assert length(user_agents) > 1
     end
   end
 end

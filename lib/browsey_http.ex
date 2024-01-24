@@ -126,20 +126,26 @@ defmodule BrowseyHttp do
   """
   @spec get(uri_or_url(), [http_get_option()]) :: get_result()
   def get(url_or_uri, opts \\ []) do
-    start_time = DateTime.utc_now()
-    retries = Access.get(opts, :max_retries, 0)
+    case validate_url(url_or_uri) do
+      {:ok, %URI{} = uri} ->
+        start_time = DateTime.utc_now()
+        retries = Access.get(opts, :max_retries, 0)
 
-    Enum.reduce_while(0..retries, nil, fn attempt, _ ->
-      result = get_internal(url_or_uri, [], opts)
-      {error_or_ok, resp_or_exception} = result
+        Enum.reduce_while(0..retries, nil, fn attempt, _ ->
+          result = get_internal(uri, [], opts)
+          {error_or_ok, resp_or_exception} = result
 
-      if should_retry?(resp_or_exception) and attempt < retries do
-        Process.sleep(retry_delay_slow(attempt))
-        {:cont, result}
-      else
-        {:halt, {error_or_ok, finalize_response(resp_or_exception, start_time)}}
-      end
-    end)
+          if should_retry?(resp_or_exception) and attempt < retries do
+            Process.sleep(retry_delay_slow(attempt))
+            {:cont, result}
+          else
+            {:halt, {error_or_ok, finalize_response(resp_or_exception, start_time)}}
+          end
+        end)
+
+      error ->
+        error
+    end
   end
 
   @spec get!(uri_or_url(), [http_get_option()]) :: BrowseyHttp.Response.t() | no_return
@@ -252,8 +258,10 @@ defmodule BrowseyHttp do
 
     uri = URI.parse(url_or_uri)
 
-    # TODO: Support passing cookies via --cookie "NAME1=VALUE1; NAME2=VALUE2"
-    # TODO: could retrieve cookies via `--cookie somefile` and store them via `--cookie-jar somefile`
+    # TODO: Should we have a separate cookie file for every request?
+    tmp_dir = System.tmp_dir!()
+    cookie_file = Path.join(tmp_dir, "cookie-jar")
+
     command =
       Enum.join(
         [
@@ -262,7 +270,9 @@ defmodule BrowseyHttp do
           to_string(uri),
           redirect_args,
           "--max-time #{timeout / 1_000}",
-          "--max-filesize #{max_bytes}"
+          "--max-filesize #{max_bytes}",
+          "--cookie #{cookie_file}",
+          "--cookie-jar #{cookie_file}"
         ],
         " "
       )
@@ -282,10 +292,10 @@ defmodule BrowseyHttp do
         status = Access.fetch!(error_kwlist, :exit_status)
 
         case status do
-          6 -> {:error, ConnectionException.could_not_resolve_host(uri)}
+          s when s in [6, 1536] -> {:error, ConnectionException.could_not_resolve_host(uri)}
           7 -> {:error, ConnectionException.could_not_connect(uri)}
           s when s in [28, 7168] -> {:error, TimeoutException.timed_out(uri, timeout)}
-          35 -> {:error, SslException.new(uri)}
+          s when s in [35, 15_360] -> {:error, SslException.new(uri)}
           s when s in [47, 12_032] -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
           s when s in [63, 16_128] -> {:error, TooLargeException.new(uri, max_bytes)}
           _ -> {:error, ConnectionException.unknown_error(uri, status)}
@@ -377,6 +387,22 @@ defmodule BrowseyHttp do
   defp crawl_resources?(%BrowseyHttp.Response{} = resp, opts) do
     %BrowseyHttp.Response{final_uri: %URI{} = final, uri_sequence: [%URI{} = first | _]} = resp
     opts[:load_resources_when_redirected_off_host?] || final.host == first.host
+  end
+
+  defp validate_url(url) when is_binary(url) do
+    url
+    |> URI.parse()
+    |> validate_url()
+  end
+
+  defp validate_url(%URI{} = uri) do
+    case uri do
+      %URI{scheme: scheme, host: host} when byte_size(host) > 0 and scheme in ["http", "https"] ->
+        {:ok, uri}
+
+      _ ->
+        {:error, ConnectionException.invalid_url(uri)}
+    end
   end
 
   # TODO: Make this configurable

@@ -229,7 +229,7 @@ defmodule BrowseyHttpTest do
     @tag timeout: 5_000
     test "does not send exit messages on timeout" do
       assert {:error, %TimeoutException{}} =
-               BrowseyHttp.get("http://httpbin.org/delay/1", timeout: 0)
+               BrowseyHttp.get("http://httpbin.org/delay/1", timeout: 1)
 
       receive do
         msg -> flunk("Should not have received a message: #{inspect(msg)}")
@@ -376,6 +376,44 @@ defmodule BrowseyHttpTest do
         ])
 
       assert length(user_agents) > 1
+    end
+  end
+
+  @tag integration: true
+  test "identifies bad SSL certificates" do
+    for url <- [
+          "https://expired.badssl.com/",
+          "https://wrong.host.badssl.com/",
+          "https://self.signed.badssl.com/"
+        ] do
+      assert {:error, %SslException{} = error} = BrowseyHttp.get(url)
+      assert error.uri == URI.parse(url)
+    end
+  end
+
+  test "identifies malformed urls" do
+    for url <- [
+          "",
+          "http://",
+          "https://",
+          "https:// this isn't a url",
+          "this isn't a url",
+          "example.com"
+        ] do
+      assert {:error, %ConnectionException{} = error} = BrowseyHttp.get(url)
+      assert error.uri == URI.parse(url)
+    end
+  end
+
+  @tag integration: true
+  test "identifies nonexistent domains" do
+    for url <- [
+          "http://browsey-http-not-a-host-#{System.unique_integer()}.de",
+          "https://browsey-http-not-a-host-#{System.unique_integer()}.de"
+        ] do
+      assert {:error, %ConnectionException{} = error} = BrowseyHttp.get(url)
+      assert error.uri == URI.parse(url)
+      assert error.error_code == 6
     end
   end
 end

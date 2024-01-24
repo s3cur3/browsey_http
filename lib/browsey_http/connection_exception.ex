@@ -12,6 +12,16 @@ defmodule BrowseyHttp.ConnectionException do
     }
   end
 
+  def invalid_url(%URI{} = uri) do
+    error_code = 6
+
+    %__MODULE__{
+      message: "Invalid URL. Error #{inspect(error_code)}",
+      uri: uri,
+      error_code: error_code
+    }
+  end
+
   def could_not_resolve_host(%URI{} = uri) do
     error_code = 6
 

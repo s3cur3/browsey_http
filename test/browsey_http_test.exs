@@ -175,7 +175,6 @@ defmodule BrowseyHttpTest do
   end
 
   describe "retrying" do
-    # TODO: Disable "retry: got response with status 500" error logs
     @tag capture_log: true
     test "retries up to max_retries", %{bypass: bypass, url: url} do
       success_result = "it worked!"
@@ -192,10 +191,10 @@ defmodule BrowseyHttpTest do
         Plug.Conn.resp(conn, 500, "internal error")
       end)
 
-      assert {:ok, resp} = BrowseyHttp.get(url, max_retries: 2)
+      assert {:ok, %BrowseyHttp.Response{} = resp} = BrowseyHttp.get(url, max_retries: 2)
       assert resp.status == 200
       assert resp.body == success_result
-      assert resp.final_uri == URI.parse(url)
+      assert resp.final_uri == URI.parse(url <> "/")
       assert resp.uri_sequence == [resp.final_uri]
     end
 

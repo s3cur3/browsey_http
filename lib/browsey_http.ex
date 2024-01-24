@@ -103,7 +103,7 @@ defmodule BrowseyHttp do
   ### Options
 
   - `:max_response_size_bytes`: The maximum size of the response body, in bytes, or `:infinity`.
-     If the response body exceeds this size, we'll raise a `TooLargeException`. This is important
+     If the response body exceeds this size, we'll return a `TooLargeException`. This is important
      so that unintentionally downloading, say, a huge video file doesn't run your server out
      of memory. Defaults to 5,242,880 (5 MiB).
   - `:follow_redirects?`: whether to follow redirects. Defaults to true, in which case the
@@ -126,18 +126,28 @@ defmodule BrowseyHttp do
   """
   @spec get(uri_or_url(), [http_get_option()]) :: get_result()
   def get(url_or_uri, opts \\ []) do
-    {:ok, get!(url_or_uri, opts)}
-  rescue
-    e -> {:error, e}
+    start_time = DateTime.utc_now()
+    retries = Access.get(opts, :max_retries, 0)
+
+    Enum.reduce_while(0..retries, nil, fn attempt, _ ->
+      result = get_internal(url_or_uri, [], opts)
+      {error_or_ok, resp_or_exception} = result
+
+      if should_retry?(resp_or_exception) and attempt < retries do
+        Process.sleep(retry_delay_slow(attempt))
+        {:cont, result}
+      else
+        {:halt, {error_or_ok, finalize_response(resp_or_exception, start_time)}}
+      end
+    end)
   end
 
   @spec get!(uri_or_url(), [http_get_option()]) :: BrowseyHttp.Response.t() | no_return
   def get!(url_or_uri, opts \\ []) do
-    start_time = DateTime.utc_now()
-
-    url_or_uri
-    |> get_internal!([], opts)
-    |> finalize_response(start_time)
+    case get(url_or_uri, opts) do
+      {:ok, resp} -> resp
+      {:error, exception} -> raise exception
+    end
   end
 
   @type resource_option ::
@@ -211,9 +221,9 @@ defmodule BrowseyHttp do
     end
   end
 
-  @spec get_internal!(uri_or_url(), [URI.t()], Keyword.t()) ::
-          BrowseyHttp.Response.t() | no_return
-  defp get_internal!(url_or_uri, prev_uris, opts) do
+  @spec get_internal(uri_or_url(), [URI.t()], Keyword.t()) ::
+          {:ok, BrowseyHttp.Response.t()} | {:error, Exception.t()}
+  defp get_internal(url_or_uri, prev_uris, opts) do
     browser_script =
       case Access.get(opts, :browser, :chrome) do
         :random -> available_browsers() |> Map.values() |> Enum.random()
@@ -264,21 +274,21 @@ defmodule BrowseyHttp do
 
         meta_parts = result[:stderr] || []
         metadata = Enum.join(meta_parts)
-        
-        curl_output_to_response(body, metadata, uri, prev_uris)
+
+        {:ok, curl_output_to_response(body, metadata, uri, prev_uris)}
 
       # TODO: Parse the exit code (see section "EXIT CODES" of the cURL man page)
       {:error, error_kwlist} ->
         status = Access.fetch!(error_kwlist, :exit_status)
 
         case status do
-          6 -> raise ConnectionException.could_not_resolve_host(uri)
-          7 -> raise ConnectionException.could_not_connect(uri)
-          s when s in [28, 7168] -> raise TimeoutException.timed_out(uri, timeout)
-          35 -> raise SslException.new(uri)
-          s when s in [47, 12_032] -> raise TooManyRedirectsException.new(uri, @max_redirects)
-          s when s in [63, 16_128] -> raise TooLargeException.new(uri, max_bytes)
-          _ -> raise ConnectionException.unknown_error(uri, status)
+          6 -> {:error, ConnectionException.could_not_resolve_host(uri)}
+          7 -> {:error, ConnectionException.could_not_connect(uri)}
+          s when s in [28, 7168] -> {:error, TimeoutException.timed_out(uri, timeout)}
+          35 -> {:error, SslException.new(uri)}
+          s when s in [47, 12_032] -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
+          s when s in [63, 16_128] -> {:error, TooLargeException.new(uri, max_bytes)}
+          _ -> {:error, ConnectionException.unknown_error(uri, status)}
         end
     end
   end
@@ -318,13 +328,18 @@ defmodule BrowseyHttp do
     %{resp | runtime_ms: runtime_ms}
   end
 
-  defp should_retry?(_req, %Req.Response{status: status}) do
+  defp finalize_response(error, _), do: error
+
+  defp should_retry?(%BrowseyHttp.Response{status: status}) do
     status >= 400
   end
 
-  defp should_retry?(_req, %{__exception__: true, reason: :timeout}), do: true
-  defp should_retry?(_req, %{__exception__: true, reason: :econnrefused}), do: true
-  defp should_retry?(_req, %{__exception__: true}), do: false
+  defp should_retry?(%TimeoutException{}), do: true
+  defp should_retry?(%ConnectionException{}), do: true
+
+  defp should_retry?(%SslException{}), do: false
+  defp should_retry?(%TooLargeException{}), do: false
+  defp should_retry?(%TooManyRedirectsException{}), do: false
 
   defp stream_embedded_resources(%BrowseyHttp.Response{final_uri: uri} = resp, opts) do
     case Floki.parse_document(resp.body) do

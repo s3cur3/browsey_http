@@ -95,13 +95,7 @@ defmodule BrowseyHttp.MixProject do
       # Faster HTML parser for Floki written in Rust
       # I'm getting a NIF panick using it... see Html5ever in config.exs.
       # {:html5ever, "~> 0.15.0"},
-      {:jason, "~> 1.2"},
-      {:req, "~> 0.4"},
       {:typed_struct, "~> 0.3.0", runtime: false},
-
-      # Decompression
-      {:ezstd, "~> 1.0"},
-      {:ex_brotli, "~> 0.4"},
 
       # Code quality
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

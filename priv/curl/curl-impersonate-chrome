@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+check_homebrew () {
+  if ! command -v brew &> /dev/null; then
+    echo "Homebrew could not be found; please install it,"
+    echo "or install the following dependencies:"
+    echo "  - libidn2"
+    exit 1
+  fi
+}
+
+check_mac_deps () {
+  set -e
+
+  if command -v idn2 &> /dev/null; then
+    version_dir=basename -a /opt/homebrew/Cellar/libidn2/2.*
+
+# TODO: Also /usr/local/
+
+    for dir in /opt/homebrew/Cellar/libidn2/2.* ; do
+      if [ -d "$dir" ]; then
+        path="/opt/homebrew/Cellar/libidn2/$dir/lib/libidn2.0.dylib"
+        cd "$dir"
+      fi
+    done
+  else
+    echo "---- Installing dependency libidn2 ----"
+    check_homebrew
+    brew install libidn2
+    echo "---- Finished installing dependency libidn2 ----"
+  fi
+}
+
+# Find the directory of this script
+dir=${0%/*}
+
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+  "$dir/linux/curl-impersonate-chrome" "$@"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  # check_mac_deps
+  #PATH="/usr/local/opt/libidn2/bin:$PATH"
+  "$dir/macos-$(uname -m)/curl-impersonate-chrome" "$@"
+fi

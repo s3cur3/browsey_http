@@ -69,7 +69,7 @@ defmodule BrowseyHttp.MixProject do
   defp package do
     # These are the default files included in the package
     [
-      files: ["lib", "mix.exs", "README.md", "CHANGELOG.md"],
+      files: ["lib", "mix.exs", "README.md", "CHANGELOG.md", "priv/curl"],
       maintainers: ["Tyler Young"],
       licenses: ["Commercial"],
       links: %{"GitHub" => @source_url}

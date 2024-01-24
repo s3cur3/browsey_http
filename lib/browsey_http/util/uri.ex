@@ -1,4 +1,4 @@
-defmodule BrowseyHttp.Uri do
+defmodule BrowseyHttp.Util.Uri do
   @moduledoc false
 
   def canonical_uri("http://" <> _ = url, _), do: URI.parse(url)

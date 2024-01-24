@@ -416,4 +416,111 @@ defmodule BrowseyHttpTest do
       assert error.error_code == 6
     end
   end
+
+  describe "get_with_resources/2" do
+    test "fetches CSS, JS, and images", %{bypass: bypass, url: url} do
+      html = """
+      <html>
+        <head>
+          <script src='/javascript.js' />
+          <link rel='stylesheet' href='dir/app.css' />
+        </head>
+        <body>
+          <img src='#{url}/img/image.png' />
+        </body>
+      </html>
+      """
+
+      css = "img { url(image-from-css.png); }"
+      js = "use strict; function() { }"
+      png = <<137, 80, 78, 71, 13, 10, 26, 10, 0>>
+
+      bypass_html(bypass, "/", html)
+      bypass_css(bypass, "/dir/app.css", css)
+      bypass_js(bypass, "/javascript.js", js)
+      bypass_png(bypass, "/img/image.png", png)
+
+      assert {:ok, responses} = BrowseyHttp.get_with_resources(url)
+      assert length(responses) == 4
+
+      uris = Enum.map(responses, & &1.final_uri)
+      assert hd(uris) == URI.parse(url <> "/")
+
+      paths = Enum.map(uris, & &1.path)
+
+      assert Enum.sort(paths) ==
+               Enum.sort(["/", "/dir/app.css", "/javascript.js", "/img/image.png"])
+
+      assert Enum.all?(responses, &(&1.status == 200))
+
+      css_resp = Enum.find(responses, &(&1.final_uri.path == "/dir/app.css"))
+      assert css_resp.headers["content-type"] == ["text/css"]
+      assert css_resp.body == css
+
+      js_resp = Enum.find(responses, &(&1.final_uri.path == "/javascript.js"))
+      assert js_resp.headers["content-type"] == ["text/javascript"]
+      assert js_resp.body == js
+
+      png_resp = Enum.find(responses, &(&1.final_uri.path == "/img/image.png"))
+      assert png_resp.headers["content-type"] == ["image/png"]
+      assert png_resp.body == png
+
+      html_resp = Enum.find(responses, &(&1.final_uri.path == "/"))
+      assert html_resp.headers["content-type"] == ["text/html"]
+      assert html_resp.body == html
+    end
+
+    test "handles protocol-relative URLs", %{bypass: bypass, url: url} do
+      html = """
+      <html>
+        <body>
+          <img src='#{String.replace(url, "http:", "")}/img/image.png' />
+        </body>
+      </html>
+      """
+
+      png = <<137, 80, 78, 71, 13, 10, 26, 10, 0>>
+
+      bypass_html(bypass, "/", html)
+      bypass_png(bypass, "/img/image.png", png)
+
+      assert {:ok, [_, png_resp]} = BrowseyHttp.get_with_resources(url)
+
+      assert png_resp.final_uri == URI.parse("#{url}/img/image.png")
+      assert png_resp.headers["content-type"] == ["image/png"]
+      assert png_resp.body == png
+    end
+
+    test "does not crawl the same resource twice", %{bypass: bypass, url: url} do
+      html = """
+      <html>
+        <head>
+          <script src='/javascript.js' />
+          <script src='/javascript.js' />
+          <script src='javascript.js' />
+          <link rel='stylesheet' href='/dir/app.css' />
+          <link rel='stylesheet' href='dir/app.css' />
+          <link rel='stylesheet' href='#{url}/dir/app.css' />
+        </head>
+        <body>
+          <img src='#{url}/img/image.png' />
+          <img src='/img/image.png' />
+          <img src='img/image.png' />
+        </body>
+      </html>
+      """
+
+      css = "img { url(image-from-css.png); }"
+      js = "use strict; function() { }"
+      png = <<137, 80, 78, 71, 13, 10, 26, 10, 0>>
+
+      bypass_html(bypass, "/", html)
+      bypass_css(bypass, "/dir/app.css", css)
+      bypass_js(bypass, "/javascript.js", js)
+      bypass_png(bypass, "/img/image.png", png)
+
+      assert {:ok, responses} = BrowseyHttp.get_with_resources(url)
+      assert length(responses) == 4
+    end
+  end
 end

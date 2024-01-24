@@ -70,6 +70,7 @@ defmodule BrowseyHttp do
   alias BrowseyHttp.TimeoutException
   alias BrowseyHttp.TooLargeException
   alias BrowseyHttp.TooManyRedirectsException
+  alias BrowseyHttp.Util
 
   require Logger
 
@@ -362,7 +363,7 @@ defmodule BrowseyHttp do
         uris_to_fetch =
           parsed
           |> Html.urls_a_browser_would_load_immediately(opts)
-          |> MapSet.new(&BrowseyHttp.Uri.canonical_uri(&1, uri))
+          |> MapSet.new(&Util.Uri.canonical_uri(&1, uri))
           |> MapSet.difference(ignore_uris)
 
         uris_to_fetch

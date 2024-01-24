@@ -102,6 +102,7 @@ defmodule BrowseyHttp.Response do
   """
   @spec status_name(non_neg_integer()) :: String.t()
   def status_name(status)
+  def status_name(200), do: "OK"
   def status_name(300), do: "Multiple Choices"
   def status_name(301), do: "Moved Permanently"
   def status_name(302), do: "Found"

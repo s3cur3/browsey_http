@@ -49,7 +49,8 @@ defmodule BrowseyHttp.MixProject do
 
   def application do
     [
-      mod: {BrowseyHttp.Application, []}
+      mod: {BrowseyHttp.Application, []},
+      included_applications: [:erlexec]
     ]
   end
 
@@ -85,7 +86,6 @@ defmodule BrowseyHttp.MixProject do
       {:domainatrex, "~> 3.0"},
       {:erlexec, "~> 2.0"},
       {:floki, ">= 0.30.0"},
-      {:httpoison, "~> 2.0"},
       # Faster HTML parser for Floki written in Rust
       # I'm getting a NIF panic using it... see Html5ever in config.exs.
       # {:html5ever, "~> 0.15.0"},

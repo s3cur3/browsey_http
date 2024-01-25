@@ -299,7 +299,7 @@ defmodule BrowseyHttp do
         " "
       )
 
-    case :exec.run(command, [:sync, :stdout, :stderr], timeout + 5_000) do
+    case Util.Exec.exec(command, timeout + 5_000) do
       {:ok, result} ->
         body_parts = result[:stdout] || []
         body = Enum.join(body_parts)

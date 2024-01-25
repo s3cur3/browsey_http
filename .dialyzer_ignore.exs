@@ -5,4 +5,6 @@
 #
 # More info in the Dialyxir README:
 # https://github.com/jeremyjh/dialyxir#elixir-term-format
-[]
+[
+  {"lib/browsey_http/util/exec.ex", :unknown_function}
+]

@@ -9,6 +9,10 @@ defmodule BrowseyHttp.Application do
       System.put_env("SHELL", "/bin/sh")
     end
 
-    Supervisor.start_link([], strategy: :one_for_one)
+    children = [
+      %{id: :exec, start: {:exec, :start_link, [[]]}, restart: :permanent}
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one)
   end
 end

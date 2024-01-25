@@ -35,4 +35,11 @@ defmodule BrowseyHttp.TimeoutExceptionTest do
     assert exception.uri == @uri
     assert exception.message == "Timed out after 5.001 seconds"
   end
+
+  test "formats infinity" do
+    exception = TimeoutException.timed_out(@uri, :infinity)
+    assert exception.timeout_ms == :infinity
+    assert exception.uri == @uri
+    assert exception.message == "Timed out"
+  end
 end

@@ -14,6 +14,7 @@ defmodule BrowseyHttp.Util.Uri do
 
   def host_without_subdomains(_), do: nil
 
+  @spec canonical_uri(String.t(), URI.t()) :: URI.t()
   def canonical_uri("http://" <> _ = url, _), do: URI.parse(url)
   def canonical_uri("https://" <> _ = url, _), do: URI.parse(url)
 

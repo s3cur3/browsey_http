@@ -2,6 +2,13 @@ defmodule BrowseyHttp.TooLargeException do
   @moduledoc false
   defexception [:message, :uri, :max_bytes]
 
+  @type t() :: %__MODULE__{
+          message: String.t(),
+          uri: URI.t(),
+          max_bytes: non_neg_integer()
+        }
+
+  @spec new(URI.t(), non_neg_integer()) :: t()
   def new(%URI{} = uri, bytes) do
     %__MODULE__{
       message: "Response body exceeds #{format_bytes(bytes)}",

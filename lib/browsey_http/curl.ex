@@ -2,6 +2,11 @@ defmodule BrowseyHttp.Curl do
   @moduledoc false
   alias BrowseyHttp.Util
 
+  @spec parse_metadata(String.t()) :: %{
+          headers: BrowseyHttp.Response.headers(),
+          paths: [String.t()],
+          status: integer() | nil
+        }
   def parse_metadata(stderr_output) do
     stderr_lines = String.split(stderr_output, ["\n", "\r\n"])
 

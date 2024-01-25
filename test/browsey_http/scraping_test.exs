@@ -108,6 +108,14 @@ defmodule BrowseyHttp.ScrapingTest do
     assert text =~ "Disney On Ice presents Into the Magic Tickets"
   end
 
+  @tag local_integration: true
+  test "scrapes Facebook" do
+    url = "https://www.facebook.com/reel/6742379389203765?fs=e&s=TIeQ9V&mibextid=WaTAxP"
+    text = scrape_text(url)
+    assert text =~ "Reviews ("
+    assert text =~ "Disney On Ice presents Into the Magic Tickets"
+  end
+
   defp scrape_text(url) do
     url
     |> get_body!()

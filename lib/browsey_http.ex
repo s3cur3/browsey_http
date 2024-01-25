@@ -5,10 +5,11 @@ defmodule BrowseyHttp do
   Browsey aims to behave as much like a real browser as possible, short of executing JavaScript.
   It's able to scrape sites that are notoriously difficult, including:
 
-  - LinkedIn
   - Amazon
   - Google
   - TicketMaster
+  - LinkedIn (at least for the first few requests per day per IP, after which even real
+    browsers will be shown the "auth wall")
   - Real estate sites including Zillow, Realtor.com, and Trulia
   - OpenSea
   - Sites protected by Cloudflare

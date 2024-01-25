@@ -13,7 +13,7 @@ defmodule BrowseyHttp.ConnectionException do
     error_code = 7
 
     %__MODULE__{
-      message: "Could not connect to host. Error #{inspect(error_code)}",
+      message: "Could not connect to host",
       uri: uri,
       error_code: error_code
     }
@@ -24,7 +24,7 @@ defmodule BrowseyHttp.ConnectionException do
     error_code = 6
 
     %__MODULE__{
-      message: "Invalid URL. Error #{inspect(error_code)}",
+      message: "Invalid URL",
       uri: uri,
       error_code: error_code
     }
@@ -35,7 +35,7 @@ defmodule BrowseyHttp.ConnectionException do
     error_code = 6
 
     %__MODULE__{
-      message: "Could not resolve host. Error #{inspect(error_code)}",
+      message: "Could not resolve host",
       uri: uri,
       error_code: error_code
     }
@@ -44,7 +44,7 @@ defmodule BrowseyHttp.ConnectionException do
   @spec unknown_error(URI.t(), non_neg_integer) :: t()
   def unknown_error(%URI{} = uri, error_code) do
     %__MODULE__{
-      message: "Failed to retrieve URL. Error #{inspect(error_code)}",
+      message: "Failed to retrieve URL",
       uri: uri,
       error_code: error_code
     }

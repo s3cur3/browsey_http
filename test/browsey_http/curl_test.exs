@@ -49,6 +49,56 @@ defmodule BrowseyHttp.Util.CurlTest do
     assert status == 401
   end
 
+  test "parses status" do
+    stderr_output = """
+      % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+    0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 93.184.216.34:80...
+    * Connected to www.example.com (93.184.216.34) port 80 (#0)
+    0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0> GET / HTTP/1.1
+    > Host: www.example.com
+    > Connection: Upgrade, HTTP2-Settings
+    > Upgrade: h2c
+    > HTTP2-Settings: AAEAAQAAAAIAAAAAAAMAAAPoAAQAYAAAAAYABAAA
+    > sec-ch-ua: "Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"
+    > sec-ch-ua-mobile: ?0
+    > sec-ch-ua-platform: "Windows"
+    > Upgrade-Insecure-Requests: 1
+    > User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36
+    > Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+    > Sec-Fetch-Site: none
+    > Sec-Fetch-Mode: navigate
+    > Sec-Fetch-User: ?1
+    > Sec-Fetch-Dest: document
+    > Accept-Encoding: gzip, deflate, br
+    > Accept-Language: en-US,en;q=0.9
+    > 
+    < HTTP/1.1 200 OK
+    < Content-Encoding: gzip
+    < Accept-Ranges: bytes
+    < Age: 124430
+    < Cache-Control: max-age=604800
+    < Content-Type: text/html; charset=UTF-8
+    < Date: Thu, 25 Jan 2024 21:12:26 GMT
+    < Etag: "3147526947"
+    < Expires: Thu, 01 Feb 2024 21:12:26 GMT
+    < Last-Modified: Thu, 17 Oct 2019 07:18:26 GMT
+    < Server: ECS (dab/4A9A)
+    < Vary: Accept-Encoding
+    < X-Cache: HIT
+    < Content-Length: 648
+    < Connection: close
+    < 
+    { [648 bytes data]
+    100   648  100   648    0     0  15269      0 --:--:-- --:--:-- --:--:-- 16200
+    * Closing connection 0
+    """
+
+    uri = URI.parse("http://www.example.com")
+    assert %{status: status} = Curl.parse_metadata(stderr_output, uri)
+    assert status == 200
+  end
+
   test "copes with missing status" do
     stderr_output = """
       % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current

@@ -12,12 +12,8 @@ defmodule BrowseyHttp.Util.Curl do
 
     responses =
       stderr_lines
-      |> Enum.flat_map(fn line ->
-        case String.split(line, "< HTTP/", parts: 2) do
-          [progress, status] -> [progress, "< HTTP/" <> status]
-          _ -> [line]
-        end
-      end)
+      |> Enum.flat_map(&split_smooshed_lines(&1, "< HTTP/"))
+      |> Enum.flat_map(&split_smooshed_lines(&1, "> GET "))
       |> Enum.filter(&String.starts_with?(&1, ["< ", "> GET "]))
       |> Enum.chunk_by(&String.starts_with?(&1, "> GET "))
       |> Enum.chunk_every(2)
@@ -77,8 +73,8 @@ defmodule BrowseyHttp.Util.Curl do
       last_response
       |> Enum.filter(&String.starts_with?(&1, "< HTTP/"))
       |> List.last()
-      |> String.split(" ", parts: 3)
-      |> List.last()
+      |> String.split(" ", parts: 4)
+      |> Enum.at(2)
       |> Util.Integer.from_string()
       |> case do
         {:ok, status} -> status
@@ -86,6 +82,13 @@ defmodule BrowseyHttp.Util.Curl do
       end
 
     %{headers: parse_headers(last_response), uris: uris, status: last_status}
+  end
+
+  defp split_smooshed_lines(line, token) do
+    case String.split(line, token, parts: 2) do
+      [progress, status] -> [progress, token <> status]
+      _ -> [line]
+    end
   end
 
   # Drop everything between "< HTTP/1.1 101 Switching Protocols" and "< HTTP/2 200"

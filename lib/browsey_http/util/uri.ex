@@ -1,6 +1,19 @@
 defmodule BrowseyHttp.Util.Uri do
   @moduledoc false
 
+  @spec host_without_subdomains(URI.t()) :: String.t() | nil
+  def host_without_subdomains(%URI{host: host}) when byte_size(host) > 0 do
+    case Domainatrex.parse(host) do
+      {:ok, %{domain: domain, tld: tld}} when byte_size(domain) > 0 and byte_size(tld) > 0 ->
+        "#{domain}.#{tld}"
+
+      _ ->
+        host
+    end
+  end
+
+  def host_without_subdomains(_), do: nil
+
   def canonical_uri("http://" <> _ = url, _), do: URI.parse(url)
   def canonical_uri("https://" <> _ = url, _), do: URI.parse(url)
 

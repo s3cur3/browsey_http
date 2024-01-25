@@ -7,8 +7,12 @@ It's able to scrape sites that are notoriously difficult, including:
 
 - LinkedIn
 - Amazon
+- Udemy
+- TicketMaster
 - Real estate sites including Zillow, Realtor.com, and Trulia
+- OpenSea
 - Sites protected by Cloudflare
+- Sites protected by PerimeterX/HUMAN Security
 - Sites protected by DataDome, including Reddit, AllTrails, and RealClearPolitics
 
 Plus, as a customer of Browsey, if you encounter a site Browsey can't scrape, we'll make

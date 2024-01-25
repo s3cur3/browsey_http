@@ -7,9 +7,11 @@ defmodule BrowseyHttp do
 
   - LinkedIn
   - Amazon
-  - Udemy
+  - TicketMaster
   - Real estate sites including Zillow, Realtor.com, and Trulia
+  - OpenSea
   - Sites protected by Cloudflare
+  - Sites protected by PerimeterX/HUMAN Security
   - Sites protected by DataDome, including Reddit, AllTrails, and RealClearPolitics
 
   Plus, as a customer of Browsey, if you encounter a site Browsey can't scrape, we'll make
@@ -90,6 +92,13 @@ defmodule BrowseyHttp do
           | {:receive_timeout, timeout()}
           | {:browser, browser() | :random}
 
+  @available_browsers %{
+    android: "curl_chrome99_android",
+    chrome: "curl_chrome116",
+    edge: "curl_edge101",
+    safari: "curl_safari15_5"
+  }
+
   # Matches Chrome's behavior:
   # https://stackoverflow.com/questions/10895406/what-is-the-maximum-number-of-http-redirections-allowed-by-all-major-browsers
   @max_redirects 19
@@ -115,7 +124,8 @@ defmodule BrowseyHttp do
   - `:receive_timeout`: The maximum time (in milliseconds) to wait to receive a response after
     connecting to the server. Defaults to 30,000 (30 seconds).
   - `:browser`: One of `:chrome`, `:chrome_android`, `:edge`, `:safari`, or `:random`.
-    Defaults to `:chrome`.
+    Defaults to `:chrome`, except for domains known to block our Chrome version, 
+    in which case a better default will be chosen.
 
   ### Examples
 
@@ -228,13 +238,32 @@ defmodule BrowseyHttp do
     end
   end
 
-  @spec get_internal(uri_or_url(), [URI.t()], Keyword.t()) ::
+  @spec default_browser(uri_or_url()) :: browser()
+  def default_browser(%URI{} = uri) do
+    domain = Util.Uri.host_without_subdomains(uri)
+    Map.get(browser_default_overrides_by_domain(), domain, :chrome)
+  end
+
+  def default_browser(url) when is_binary(url) do
+    url
+    |> URI.parse()
+    |> default_browser()
+  end
+
+  defp browser_default_overrides_by_domain do
+    %{"realtor.com" => :android}
+  end
+
+  @spec get_internal(URI.t(), [URI.t()], Keyword.t()) ::
           {:ok, BrowseyHttp.Response.t()} | {:error, Exception.t()}
-  defp get_internal(url_or_uri, prev_uris, opts) do
+  defp get_internal(%URI{} = uri, prev_uris, opts) do
+    default_browser_for_host = default_browser(uri)
+
     browser_script =
-      case Access.get(opts, :browser, :chrome) do
-        :random -> available_browsers() |> Map.values() |> Enum.random()
-        browser -> Map.fetch!(available_browsers(), browser)
+      case Access.get(opts, :browser, default_browser_for_host) do
+        :random -> @available_browsers |> Map.values() |> Enum.random()
+        b when is_map_key(@available_browsers, b) -> Map.fetch!(@available_browsers, b)
+        _ -> default_browser_for_host
       end
 
     script = Application.app_dir(:browsey_http, ["priv", "curl", browser_script])
@@ -256,8 +285,6 @@ defmodule BrowseyHttp do
       else
         ""
       end
-
-    uri = URI.parse(url_or_uri)
 
     # TODO: Should we have a separate cookie file for every request?
     tmp_dir = System.tmp_dir!()
@@ -302,16 +329,6 @@ defmodule BrowseyHttp do
           _ -> {:error, ConnectionException.unknown_error(uri, status)}
         end
     end
-  end
-
-  @spec available_browsers() :: %{browser() => String.t()}
-  defp available_browsers do
-    %{
-      android: "curl_chrome99_android",
-      chrome: "curl_chrome116",
-      edge: "curl_edge101",
-      safari: "curl_safari15_5"
-    }
   end
 
   defp curl_output_to_response(curl_output, metadata, url_or_uri, prev_uris) do

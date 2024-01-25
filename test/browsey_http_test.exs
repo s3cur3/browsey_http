@@ -620,6 +620,16 @@ defmodule BrowseyHttpTest do
       assert is_binary(favicon.body)
     end
   end
+
+  describe "default_browser/1" do
+    test "defaults to Chrome" do
+      assert BrowseyHttp.default_browser("https://www.example.com") == :chrome
+    end
+
+    test "chooses different default browser for realtor.com" do
+      assert BrowseyHttp.default_browser("https://www.realtor.com") == :android
+    end
+  end
 end
 
 defmodule BrowseyHttpSyncTest do

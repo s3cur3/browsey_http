@@ -17,6 +17,12 @@ defmodule BrowseyHttp.Curl do
 
     responses =
       stderr_lines
+      |> Enum.flat_map(fn line ->
+        case String.split(line, "< HTTP/", parts: 2) do
+          [progress, status] -> [progress, "< HTTP/" <> status]
+          _ -> [line]
+        end
+      end)
       |> Enum.filter(&String.starts_with?(&1, "<"))
       |> Enum.chunk_by(&String.starts_with?(&1, "< HTTP/"))
       |> Enum.chunk_every(2)

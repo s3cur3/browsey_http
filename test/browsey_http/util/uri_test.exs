@@ -12,4 +12,23 @@ defmodule BrowseyHttp.Util.UriTest do
                URI.parse(fully_qualified_url)
     end
   end
+
+  test "host_without_subdomains/1 can drop subdomains" do
+    www = URI.parse("https://www.example.com")
+    assert Util.Uri.host_without_subdomains(www) == "example.com"
+
+    dashboard = URI.parse("https://dashboard.example.com")
+    assert Util.Uri.host_without_subdomains(dashboard) == "example.com"
+
+    many_subdomains = URI.parse("https://www1.www2.example.com")
+    assert Util.Uri.host_without_subdomains(many_subdomains) == "example.com"
+  end
+
+  test "host_without_subdomains/1 handles bogus URIs" do
+    www = URI.parse("https://not-a-domain")
+    assert Util.Uri.host_without_subdomains(www) == "not-a-domain"
+
+    dashboard = URI.parse("bogus")
+    assert is_nil(Util.Uri.host_without_subdomains(dashboard))
+  end
 end

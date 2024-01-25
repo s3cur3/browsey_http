@@ -3,6 +3,10 @@ defmodule BrowseyHttp.ScrapingTest do
 
   doctest BrowseyHttp
 
+  setup do
+    Process.sleep(3_000)
+  end
+
   @tag scraping_todo: true
   test "scrapes Twitter" do
     url = "https://twitter.com/FaizaanShamsi/status/1747641905981100212"
@@ -71,7 +75,7 @@ defmodule BrowseyHttp.ScrapingTest do
   end
 
   @tag local_integration: true
-  test "scrapes Realtor.com" do
+  test "scrapes Realtor.com, protected by PerimeterX" do
     url =
       "https://www.realtor.com/realestateandhomes-detail/11409-Meadow-Ln_Leawood_KS_66211_M86302-48887"
 
@@ -87,7 +91,21 @@ defmodule BrowseyHttp.ScrapingTest do
   @tag local_integration: true
   test "scrapes Udemy" do
     url = "https://www.udemy.com/course/the-complete-web-development-bootcamp/"
-    assert scrape_text(url) =~ "This course includes"
+    assert scrape_text(url) =~ "Welcome to the Complete Web Development Bootcamp"
+  end
+
+  @tag local_integration: true
+  test "scrapes OpenSea" do
+    url = "https://opensea.io/rankings/trending"
+    assert scrape_text(url) =~ "Collection stats"
+  end
+
+  @tag local_integration: true
+  test "scrapes TicketMaster" do
+    url = "https://www.ticketmaster.com/disney-on-ice-presents-into-the-tickets/artist/2374998"
+    text = scrape_text(url)
+    assert text =~ "Reviews ("
+    assert text =~ "Disney On Ice presents Into the Magic Tickets"
   end
 
   defp scrape_text(url) do

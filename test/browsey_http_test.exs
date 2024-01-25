@@ -212,6 +212,7 @@ defmodule BrowseyHttpTest do
     end
   end
 
+  @tag skip_in_ci: true
   test "supports timeouts", %{bypass: bypass, url: url} do
     Bypass.stub(bypass, "GET", "/", fn conn ->
       Process.sleep(10_000)

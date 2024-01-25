@@ -222,7 +222,7 @@ defmodule BrowseyHttp do
   As with the non-streaming version, the first response will always be the initial resource.
   """
   @spec stream_with_resources(uri_or_url(), [http_get_option() | resource_option()]) ::
-          {:ok, Enumerable.t(BrowseyHttp.Response.t() | resource_responses())}
+          {:ok, Enumerable.t(BrowseyHttp.Response.t() | Exception.t())}
           | {:error, Exception.t()}
   def stream_with_resources(url_or_uri, opts \\ []) do
     case get(url_or_uri, opts) do
@@ -274,7 +274,7 @@ defmodule BrowseyHttp do
     # TODO: Don't follow redirects if we're not supposed to
     # Someday We could use the `:into` argument to stream and parse the request as it goes...
 
-    :exec.start()
+    _ = :exec.start()
 
     timeout = Access.get(opts, :timeout, :timer.seconds(30))
     max_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
@@ -369,6 +369,11 @@ defmodule BrowseyHttp do
   defp should_retry?(%TooLargeException{}), do: false
   defp should_retry?(%TooManyRedirectsException{}), do: false
 
+  @spec stream_embedded_resources(
+          BrowseyHttp.Response.t(),
+          [http_get_option() | resource_option()]
+        ) ::
+          Enumerable.t(BrowseyHttp.Response.t() | Exception.t())
   defp stream_embedded_resources(%BrowseyHttp.Response{final_uri: uri} = resp, opts) do
     case Floki.parse_document(resp.body) do
       {:ok, parsed} ->
@@ -402,6 +407,8 @@ defmodule BrowseyHttp do
     end
   end
 
+  @spec crawl_resources?(BrowseyHttp.Response.t(), [resource_option()]) ::
+          boolean()
   defp crawl_resources?(%BrowseyHttp.Response{} = resp, opts) do
     %BrowseyHttp.Response{final_uri: %URI{} = final, uri_sequence: [%URI{} = first | _]} = resp
     opts[:load_resources_when_redirected_off_host?] || final.host == first.host

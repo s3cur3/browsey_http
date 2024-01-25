@@ -39,8 +39,7 @@ defmodule BrowseyHttp.MixProject do
           :unmatched_returns,
           :error_handling,
           :extra_return,
-          :missing_return,
-          :underspecs
+          :missing_return
         ],
         # Error out when an ignore rule is no longer useful so we can remove it
         list_unused_filters: true

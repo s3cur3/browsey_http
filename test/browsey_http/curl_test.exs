@@ -34,7 +34,8 @@ defmodule BrowseyHttp.Util.CurlTest do
     * Connection #0 to host localhost left intact
     """
 
-    assert %{headers: headers, status: status} = Curl.parse_metadata(stderr_output)
+    uri = URI.parse("http://localhost:59752")
+    assert %{headers: headers, status: status} = Curl.parse_metadata(stderr_output, uri)
 
     assert headers == %{
              "cache-control" => ["max-age=0, private, must-revalidate"],
@@ -63,7 +64,8 @@ defmodule BrowseyHttp.Util.CurlTest do
     * Connection #0 to host localhost left intact
     """
 
-    assert %{headers: headers, status: status} = Curl.parse_metadata(stderr_output)
+    uri = URI.parse("http://localhost:59752")
+    assert %{headers: headers, status: status} = Curl.parse_metadata(stderr_output, uri)
 
     assert headers == %{
              "foo" => ["bar: baz"],
@@ -197,7 +199,8 @@ defmodule BrowseyHttp.Util.CurlTest do
     * Connection #0 to host localhost left intact
     """
 
-    assert %{headers: headers, paths: paths} = Curl.parse_metadata(stderr_output)
+    root_uri = URI.parse("http://localhost:59752")
+    assert %{headers: headers, uris: uris} = Curl.parse_metadata(stderr_output, root_uri)
 
     assert headers == %{
              "cache-control" => ["max-age=0, private, must-revalidate"],
@@ -207,7 +210,187 @@ defmodule BrowseyHttp.Util.CurlTest do
              "set-cookie" => ["foo=bar", "bip=bop"]
            }
 
-    assert paths == ["/", "/target1", "/target2"]
+    assert uris == Enum.map(["/", "/target1", "/target2"], &%{root_uri | path: &1})
+  end
+
+  test "parses redirect to HTTPS" do
+    stderr_output = """
+      % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+    0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 54.84.236.175:80...
+    * Connected to tylerayoung.com (54.84.236.175) port 80 (#0)
+    > GET / HTTP/1.1
+    > Host: tylerayoung.com
+    > Accept-Encoding: gzip, deflate, br
+    > Accept-Language: en-US,en;q=0.9
+    > 
+    < HTTP/1.1 301 Moved Permanently
+    < Content-Type: text/plain; charset=utf-8
+    < Date: Thu, 25 Jan 2024 19:27:56 GMT
+    < Location: https://tylerayoung.com/
+    < Server: Netlify
+    < X-Nf-Request-Id: 01HN11FPYX5KJTV1RQ91EP9EXQ
+    < Content-Length: 39
+    < 
+    * Ignoring the response-body
+    { [39 bytes data]
+    100    39  100    39    0     0    379      0 --:--:-- --:--:-- --:--:--   386
+    * Connection #0 to host tylerayoung.com left intact
+    * Clear auth, redirects to port from 80 to 443
+    * SSL connection using TLSv1.3 / TLS_AES_128_GCM_SHA256
+    * ALPN: server accepted h2
+    * Server certificate:
+    *  subject: CN=*.tylerayoung.com
+    *  SSL certificate verify ok.
+    { [5 bytes data]
+    * TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+    { [122 bytes data]
+    * using HTTP/2
+    * h2 [:method: GET]
+    } [5 bytes data]
+    > GET / HTTP/2
+    > Host: tylerayoung.com
+    > sec-ch-ua: "Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"
+    > Accept-Language: en-US,en;q=0.9
+    > 
+    { [5 bytes data]
+    < HTTP/2 200 
+    < accept-ranges: bytes
+    < age: 203
+    < cache-control: public,max-age=0,must-revalidate
+    < x-nf-request-id: 01HN11FQ28PSS4E7BQDCHWC4FF
+    < content-length: 13963
+    < 
+    { [4096 bytes data]
+    100 13963  100 13963    0     0  56969      0 --:--:-- --:--:-- --:--:-- 56969
+    * Connection #1 to host tylerayoung.com left intact
+    """
+
+    uri = URI.parse("http://tylerayoung.com")
+    assert %{uris: uris, status: 200} = Curl.parse_metadata(stderr_output, uri)
+
+    assert uris == [%{uri | path: "/"}, URI.parse("https://tylerayoung.com/")]
+  end
+
+  test "parses redirect to HTTPS + WWW" do
+    stderr_output = """
+      % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+    0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 216.40.34.41:80...
+    * Connected to thegiftedguide.com (216.40.34.41) port 80 (#0)
+    > GET / HTTP/1.1
+    > Host: thegiftedguide.com
+    > Connection: Upgrade, HTTP2-Settings
+    > Upgrade: h2c
+    > HTTP2-Settings: AAEAAQAAAAIAAAAAAAMAAAPoAAQAYAAAAAYABAAA
+    > sec-ch-ua: "Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"
+    > sec-ch-ua-mobile: ?0
+    > sec-ch-ua-platform: "Windows"
+    > Upgrade-Insecure-Requests: 1
+    > User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36
+    > Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+    > Sec-Fetch-Site: none
+    > Sec-Fetch-Mode: navigate
+    > Sec-Fetch-User: ?1
+    > Sec-Fetch-Dest: document
+    > Accept-Encoding: gzip, deflate, br
+    > Accept-Language: en-US,en;q=0.9
+    > 
+    < HTTP/1.1 303 See Other
+    < server: nginx/1.14.2
+    < date: Thu, 25 Jan 2024 20:29:29 GMT
+    < content-type: text/html; charset=utf-8
+    < transfer-encoding: chunked
+    < x-frame-options: SAMEORIGIN
+    < x-xss-protection: 1; mode=block
+    < x-content-type-options: nosniff
+    < x-download-options: noopen
+    < x-permitted-cross-domain-policies: none
+    < referrer-policy: strict-origin-when-cross-origin
+    < location: https://www.thegiftedguide.com
+    < cache-control: no-cache
+    < x-request-id: b8e18d8d-32b9-4a9e-a45c-33dedc4ea18b
+    < x-runtime: 0.010037
+    < 
+    * Ignoring the response-body
+    { [107 bytes data]
+    100    96    0    96    0     0    754      0 --:--:-- --:--:-- --:--:--   774
+    * Connection #0 to host thegiftedguide.com left intact
+    * Clear auth, redirects to port from 80 to 443
+    * Issue another request to this URL: 'https://www.thegiftedguide.com/'
+    *   Trying 142.250.114.121:443...
+    * Connected to www.thegiftedguide.com (142.250.114.121) port 443 (#1)
+    * SSL connection using TLSv1.3 / TLS_AES_128_GCM_SHA256
+    * ALPN: server accepted h2
+    * Server certificate:
+    *  subject: CN=www.thegiftedguide.com
+    *  start date: Jan  2 14:14:21 2024 GMT
+    *  expire date: Apr  1 15:04:12 2024 GMT
+    *  subjectAltName: host "www.thegiftedguide.com" matched cert's "www.thegiftedguide.com"
+    *  issuer: C=US; O=Google Trust Services LLC; CN=GTS CA 1D4
+    *  SSL certificate verify ok.
+    } [5 bytes data]
+    * using HTTP/2
+    * h2 [:method: GET]
+    * h2 [:authority: www.thegiftedguide.com]
+    * h2 [:scheme: https]
+    * h2 [:path: /]
+    * h2 [sec-ch-ua: "Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"]
+    * h2 [sec-ch-ua-mobile: ?0]
+    * h2 [sec-ch-ua-platform: "Windows"]
+    * h2 [upgrade-insecure-requests: 1]
+    * h2 [user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36]
+    * h2 [accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7]
+    * h2 [sec-fetch-site: none]
+    * h2 [sec-fetch-mode: navigate]
+    * h2 [sec-fetch-user: ?1]
+    * h2 [sec-fetch-dest: document]
+    * h2 [accept-encoding: gzip, deflate, br]
+    * h2 [accept-language: en-US,en;q=0.9]
+    * Using Stream ID: 1 (easy handle 0x7f9e2000a800)
+    } [5 bytes data]
+    > GET / HTTP/2
+    > Host: www.thegiftedguide.com
+    > sec-ch-ua: "Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"
+    > sec-ch-ua-mobile: ?0
+    > sec-ch-ua-platform: "Windows"
+    > Upgrade-Insecure-Requests: 1
+    > User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36
+    > Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+    > Sec-Fetch-Site: none
+    > Sec-Fetch-Mode: navigate
+    > Sec-Fetch-User: ?1
+    > Sec-Fetch-Dest: document
+    > Accept-Encoding: gzip, deflate, br
+    > Accept-Language: en-US,en;q=0.9
+    > 
+    { [5 bytes data]
+    < HTTP/2 200 
+    < content-type: text/html; charset=utf-8
+    < x-frame-options: DENY
+    < vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+    < cache-control: no-cache, no-store, max-age=0, must-revalidate
+    < pragma: no-cache
+    < expires: Mon, 01 Jan 1990 00:00:00 GMT
+    < date: Thu, 25 Jan 2024 20:29:30 GMT
+    < content-security-policy: base-uri 'self';object-src 'none';report-uri /_/view/cspreport;script-src 'report-sample' 'nonce-ZBTwXu3V9j5RSysGcYxsGg' 'unsafe-inline' 'unsafe-eval';worker-src 'self';frame-ancestors https://google-admin.corp.google.com/
+    < cross-origin-resource-policy: same-site
+    < cross-origin-opener-policy: unsafe-none
+    < referrer-policy: strict-origin-when-cross-origin
+    < server: ESF
+    < x-xss-protection: 0
+    < x-content-type-options: nosniff
+    < content-encoding: gzip
+    < 
+    { [230 bytes data]
+    100 15139    0 15139    0     0  46783      0 --:--:-- --:--:-- --:--:-- 46783
+    * Connection #1 to host www.thegiftedguide.com left intact
+    """
+
+    uri = URI.parse("http://thegiftedguide.com")
+    assert %{uris: uris, status: 200} = Curl.parse_metadata(stderr_output, uri)
+
+    assert uris == [%{uri | path: "/"}, URI.parse("https://www.thegiftedguide.com/")]
   end
 
   test "handles Trulia response" do
@@ -221,23 +404,6 @@ defmodule BrowseyHttp.Util.CurlTest do
     * ALPS: offers h2
     } [5 bytes data]
     * TLSv1.2 (OUT), TLS handshake, Client hello (1):
-    } [512 bytes data]
-    *  CAfile: /etc/ssl/cert.pem
-    *  CApath: none
-    { [5 bytes data]
-    * TLSv1.2 (IN), TLS handshake, Server hello (2):
-    { [122 bytes data]
-    * TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
-    } [1 bytes data]
-    * TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
-    { [19 bytes data]
-    * TLSv1.3 (IN), TLS handshake, Certificate (11):
-    { [5438 bytes data]
-    * TLSv1.3 (IN), TLS handshake, CERT verify (15):
-    { [264 bytes data]
-    * TLSv1.3 (IN), TLS handshake, Finished (20):
-    { [36 bytes data]
-    * TLSv1.3 (OUT), TLS handshake, Finished (20):
     } [36 bytes data]
     * SSL connection using TLSv1.3 / TLS_AES_128_GCM_SHA256
     * ALPN: server accepted h2
@@ -318,10 +484,13 @@ defmodule BrowseyHttp.Util.CurlTest do
     * Connection #0 to host www.trulia.com left intact
     """
 
-    assert %{headers: headers, paths: paths, status: status} = Curl.parse_metadata(stderr_output)
+    uri = URI.parse("http://www.trulia.com/home/2858-briarcliff-rd-atlanta-ga-30329-14543068")
+
+    assert %{headers: headers, uris: uris, status: status} =
+             Curl.parse_metadata(stderr_output, uri)
 
     assert status == 200
-    assert paths == ["/home/2858-briarcliff-rd-atlanta-ga-30329-14543068"]
+    assert uris == [uri]
 
     assert headers == %{
              "cache-control" => ["private, no-cache, no-store, max-age=0, must-revalidate"],

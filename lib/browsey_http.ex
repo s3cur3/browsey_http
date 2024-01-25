@@ -325,15 +325,8 @@ defmodule BrowseyHttp do
     end
   end
 
-  defp curl_output_to_response(curl_output, metadata, url_or_uri, prev_uris) do
-    %{headers: headers, paths: paths, status: status} = Curl.parse_metadata(metadata)
-    start_uri = URI.parse(url_or_uri)
-
-    uris =
-      Enum.map(paths, fn path ->
-        path_uri = URI.parse(path)
-        URI.merge(start_uri, path_uri)
-      end)
+  defp curl_output_to_response(curl_output, metadata, %URI{} = uri, prev_uris) do
+    %{headers: headers, uris: uris, status: status} = Curl.parse_metadata(metadata, uri)
 
     %BrowseyHttp.Response{
       body: curl_output,

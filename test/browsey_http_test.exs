@@ -37,12 +37,32 @@ defmodule BrowseyHttpTest do
     </html>
     """
 
-    Bypass.expect(bypass, "GET", "/", fn conn ->
-      Plug.Conn.resp(conn, 200, page_body)
-    end)
+    bypass_html(bypass, "/", page_body)
 
     assert {:ok, %BrowseyHttp.Response{} = resp} = BrowseyHttp.get(url)
     assert resp.body == page_body
+  end
+
+  test "weirdly resolves www.localhost to localhost", %{bypass: bypass, domain: domain} do
+    page_body = """
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Test Page</title>
+      </head>
+      <body>
+        <h1>Test Page</h1>
+        
+        <p>This is a test page.</p>
+      </body>
+    </html>
+    """
+
+    bypass_html(bypass, "/", page_body)
+
+    assert {:ok, %BrowseyHttp.Response{} = resp} = BrowseyHttp.get("http://www.#{domain}/")
+    assert resp.body == page_body
+    assert resp.status == 200
   end
 
   test "retrieves headers", %{bypass: bypass, url: url} do
@@ -156,6 +176,26 @@ defmodule BrowseyHttpTest do
       assert {:error, %TooManyRedirectsException{} = error} = BrowseyHttp.get(url)
       assert error.max_redirects == 19
       assert error.uri == URI.parse(url)
+    end
+
+    @tag integration: true
+    test "tracks HTTP -> HTTPS redirect" do
+      {:ok, %BrowseyHttp.Response{} = response} = BrowseyHttp.get("http://tylerayoung.com")
+
+      assert response.uri_sequence == [
+               URI.parse("http://tylerayoung.com/"),
+               URI.parse("https://tylerayoung.com/")
+             ]
+    end
+
+    @tag local_integration: true
+    test "tracks HTTP -> HTTPS + WWW redirect" do
+      {:ok, %BrowseyHttp.Response{} = response} = BrowseyHttp.get("http://thegiftedguide.com")
+
+      assert response.uri_sequence == [
+               URI.parse("http://thegiftedguide.com/"),
+               URI.parse("https://www.thegiftedguide.com/")
+             ]
     end
 
     test "supports *not* following redirects", %{bypass: bypass, url: url} do
@@ -613,7 +653,32 @@ defmodule BrowseyHttpTest do
       assert response.body == png_binary
     end
 
-    test "handles non-HTML responses", %{bypass: bypass, url: url} do
+    test "skips favicon.ico if another shortcut icon exists", %{bypass: bypass, url: url} do
+      body = """
+      <html>
+      <head>
+        <link rel="shortcut icon" href="favicon.svg" />
+      </head>
+      <body>OK</body>
+      </html>
+      """
+
+      svg = "<svg></svg>"
+
+      bypass_html(bypass, "/", body)
+      bypass_svg(bypass, "/favicon.svg", svg)
+
+      assert {:ok, [response, favicon]} = BrowseyHttp.get_with_resources(url)
+
+      assert response.status == 200
+      assert response.body == body
+
+      assert favicon.status == 200
+      assert favicon.headers["content-type"] == ["image/xml+svg"]
+      assert favicon.body == svg
+    end
+
+    test "handles garbage HTML responses", %{bypass: bypass, url: url} do
       body = "This is not actually HTML"
       bypass_html(bypass, "/", body)
       bypass_favicon(bypass)
@@ -626,6 +691,25 @@ defmodule BrowseyHttpTest do
       assert favicon.status == 200
       assert favicon.headers["content-type"] == ["image/x-icon"]
       assert is_binary(favicon.body)
+    end
+
+    test "does not try to load favicon on XML responses", %{bypass: bypass, url: url} do
+      sitemap_xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <sitemapindex xmlns="https://www.sitemaps.org/schemas/sitemap/0.9">
+          <sitemap>
+              <loc>#{url}/test.html</loc>
+              <lastmod>2014-10-01T18:23:17+00:00</lastmod>
+          </sitemap>
+        </sitemapindex>
+      """
+
+      bypass_xml(bypass, "/", sitemap_xml)
+
+      assert {:ok, [response]} = BrowseyHttp.get_with_resources(url)
+
+      assert response.status == 200
+      assert response.body == sitemap_xml
     end
   end
 

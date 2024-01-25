@@ -9,6 +9,7 @@ defmodule BrowseyHttp.BypassHelpers do
   def bypass_js(bypass, path, js), do: bypass_200(bypass, path, js, "text/javascript")
   def bypass_css(bypass, path, css), do: bypass_200(bypass, path, css, "text/css")
   def bypass_png(bypass, path, png), do: bypass_200(bypass, path, png, "image/png")
+  def bypass_svg(bypass, path, svg), do: bypass_200(bypass, path, svg, "image/xml+svg")
 
   def bypass_favicon(bypass, body \\ "") do
     Bypass.stub(

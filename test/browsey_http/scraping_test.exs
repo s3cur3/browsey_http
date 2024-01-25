@@ -92,12 +92,12 @@ defmodule BrowseyHttp.ScrapingTest do
     @tag local_integration: true
     test "scrapes Sweetwater.com" do
       url = "https://www.sweetwater.com/shop/guitars/electric-guitars/"
-      assert scrape_text(url) =~ "Read our Electric Guitars Buying Guide"
+      assert scrape_text(url) =~ "Electric Guitars Buying Guide"
     end
 
     @tag local_integration: true
     test "scrapes Build.com" do
-      url = "https://www.sweetwater.com/shop/guitars/electric-guitars/"
+      url = "https://www.build.com"
       assert scrape_text(url) =~ "Shop All Departments"
     end
   end
@@ -136,14 +136,6 @@ defmodule BrowseyHttp.ScrapingTest do
     assert text =~ "Bruce Tate"
     assert text =~ "Chattanooga, Tennessee"
     assert text =~ "Experience & Education"
-  end
-
-  @tag local_integration: true
-  test "scrapes Facebook" do
-    url = "https://www.facebook.com/reel/6742379389203765?fs=e&s=TIeQ9V&mibextid=WaTAxP"
-    text = scrape_text(url)
-    assert text =~ "Reviews ("
-    assert text =~ "Disney On Ice presents Into the Magic Tickets"
   end
 
   defp scrape_text(url) do

@@ -1,7 +1,7 @@
-defmodule BrowseyHttp.CurlTest do
+defmodule BrowseyHttp.Util.CurlTest do
   use ExUnit.Case, async: true
 
-  alias BrowseyHttp.Curl
+  alias BrowseyHttp.Util.Curl
 
   test "processes headers" do
     stderr_output = """

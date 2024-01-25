@@ -1,4 +1,4 @@
-defmodule BrowseyHttp.Curl do
+defmodule BrowseyHttp.Util.Curl do
   @moduledoc false
   alias BrowseyHttp.Util
 

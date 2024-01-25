@@ -66,12 +66,12 @@ defmodule BrowseyHttp do
   expensive third-party APIs when you encounter a site that really needs a headless browser.
   """
   alias BrowseyHttp.ConnectionException
-  alias BrowseyHttp.Curl
   alias BrowseyHttp.SslException
   alias BrowseyHttp.TimeoutException
   alias BrowseyHttp.TooLargeException
   alias BrowseyHttp.TooManyRedirectsException
   alias BrowseyHttp.Util
+  alias BrowseyHttp.Util.Curl
   alias BrowseyHttp.Util.Html
 
   require Logger

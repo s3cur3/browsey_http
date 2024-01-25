@@ -65,12 +65,12 @@ defmodule BrowseyHttp do
   """
   alias BrowseyHttp.ConnectionException
   alias BrowseyHttp.Curl
-  alias BrowseyHttp.Html
   alias BrowseyHttp.SslException
   alias BrowseyHttp.TimeoutException
   alias BrowseyHttp.TooLargeException
   alias BrowseyHttp.TooManyRedirectsException
   alias BrowseyHttp.Util
+  alias BrowseyHttp.Util.Html
 
   require Logger
 
@@ -198,7 +198,7 @@ defmodule BrowseyHttp do
     loading resources from a site you didn't expect.
   """
   @spec get_with_resources(uri_or_url(), [http_get_option() | resource_option()]) ::
-          {:ok, [BrowseyHttp.Response.t() | resource_responses]} | {:error, Exception.t()}
+          {:ok, [BrowseyHttp.Response.t() | resource_responses()]} | {:error, Exception.t()}
   def get_with_resources(url_or_uri, opts \\ []) do
     case stream_with_resources(url_or_uri, opts) do
       {:ok, responses} -> {:ok, Enum.to_list(responses)}
@@ -212,7 +212,7 @@ defmodule BrowseyHttp do
   As with the non-streaming version, the first response will always be the initial resource.
   """
   @spec stream_with_resources(uri_or_url(), [http_get_option() | resource_option()]) ::
-          {:ok, Enumerable.t(BrowseyHttp.Response.t() | resource_responses)}
+          {:ok, Enumerable.t(BrowseyHttp.Response.t() | resource_responses())}
           | {:error, Exception.t()}
   def stream_with_resources(url_or_uri, opts \\ []) do
     case get(url_or_uri, opts) do
@@ -294,7 +294,7 @@ defmodule BrowseyHttp do
 
         case status do
           s when s in [6, 1536] -> {:error, ConnectionException.could_not_resolve_host(uri)}
-          7 -> {:error, ConnectionException.could_not_connect(uri)}
+          s when s in [7, 1792] -> {:error, ConnectionException.could_not_connect(uri)}
           s when s in [28, 7168] -> {:error, TimeoutException.timed_out(uri, timeout)}
           s when s in [35, 15_360] -> {:error, SslException.new(uri)}
           s when s in [47, 12_032] -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}

@@ -86,21 +86,24 @@ defmodule BrowseyHttp.MixProject do
   defp deps do
     [
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-      {:bypass, "~> 2.1", only: [:test]},
-      {:dialyxir, "~> 1.2", only: [:dev, :test], runtime: false},
       {:domainatrex, "~> 3.0"},
       {:erlexec, "~> 2.0"},
       {:floki, ">= 0.30.0"},
       {:httpoison, "~> 2.0"},
       # Faster HTML parser for Floki written in Rust
-      # I'm getting a NIF panick using it... see Html5ever in config.exs.
+      # I'm getting a NIF panic using it... see Html5ever in config.exs.
       # {:html5ever, "~> 0.15.0"},
       {:typed_struct, "~> 0.3.0", runtime: false},
 
       # Code quality
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.2", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18.0", only: [:dev, :test], runtime: false},
-      {:styler, "~> 0.11", only: [:dev, :test], runtime: false}
+      {:styler, "~> 0.11", only: [:dev, :test], runtime: false},
+
+      # Testing
+      {:bypass, "~> 2.1", only: [:test]},
+      {:patch, "~> 0.13.0", only: [:test]}
     ]
   end
 

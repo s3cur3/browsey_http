@@ -9,6 +9,9 @@ defmodule BrowseyHttpTest do
   alias BrowseyHttp.TooLargeException
   alias BrowseyHttp.TooManyRedirectsException
 
+  @never_responding_localhost_url "http://localhost:49"
+  @never_responding_localhost_uri URI.parse(@never_responding_localhost_url)
+
   setup do
     bypass = Bypass.open()
 
@@ -50,8 +53,14 @@ defmodule BrowseyHttpTest do
       |> Plug.Conn.resp(200, "ok")
     end)
 
-    assert {:ok, %BrowseyHttp.Response{} = resp} = BrowseyHttp.get(url)
+    resp = BrowseyHttp.get!(url)
     assert %{"content-type" => ["not/real"], "foo" => ["bar: baz"]} = resp.headers
+  end
+
+  test "get!/2 raises on failure" do
+    assert_raise ConnectionException, fn ->
+      BrowseyHttp.get!(@never_responding_localhost_url)
+    end
   end
 
   test "gets the status of the response", %{bypass: bypass, url: url} do
@@ -417,6 +426,14 @@ defmodule BrowseyHttpTest do
     end
   end
 
+  test "handles failure to connect" do
+    assert {:error, %ConnectionException{} = error} =
+             BrowseyHttp.get(@never_responding_localhost_url)
+
+    assert error.uri == @never_responding_localhost_uri
+    assert error.error_code == 7
+  end
+
   describe "get_with_resources/2" do
     test "fetches CSS, JS, and images", %{bypass: bypass, url: url} do
       html = """
@@ -434,14 +451,16 @@ defmodule BrowseyHttpTest do
       css = "img { url(image-from-css.png); }"
       js = "use strict; function() { }"
       png = <<137, 80, 78, 71, 13, 10, 26, 10, 0>>
+      ico = <<1, 0, 0, 1, 0, 0, 1>>
 
       bypass_html(bypass, "/", html)
       bypass_css(bypass, "/dir/app.css", css)
       bypass_js(bypass, "/javascript.js", js)
       bypass_png(bypass, "/img/image.png", png)
+      bypass_favicon(bypass, ico)
 
       assert {:ok, responses} = BrowseyHttp.get_with_resources(url)
-      assert length(responses) == 4
+      assert length(responses) == 5
 
       uris = Enum.map(responses, & &1.final_uri)
       assert hd(uris) == URI.parse(url <> "/")
@@ -449,7 +468,7 @@ defmodule BrowseyHttpTest do
       paths = Enum.map(uris, & &1.path)
 
       assert Enum.sort(paths) ==
-               Enum.sort(["/", "/dir/app.css", "/javascript.js", "/img/image.png"])
+               Enum.sort(["/", "/favicon.ico", "/dir/app.css", "/javascript.js", "/img/image.png"])
 
       assert Enum.all?(responses, &(&1.status == 200))
 
@@ -464,6 +483,10 @@ defmodule BrowseyHttpTest do
       png_resp = Enum.find(responses, &(&1.final_uri.path == "/img/image.png"))
       assert png_resp.headers["content-type"] == ["image/png"]
       assert png_resp.body == png
+
+      ico_resp = Enum.find(responses, &(&1.final_uri.path == "/favicon.ico"))
+      assert ico_resp.headers["content-type"] == ["image/x-icon"]
+      assert ico_resp.body == ico
 
       html_resp = Enum.find(responses, &(&1.final_uri.path == "/"))
       assert html_resp.headers["content-type"] == ["text/html"]
@@ -483,10 +506,15 @@ defmodule BrowseyHttpTest do
 
       bypass_html(bypass, "/", html)
       bypass_png(bypass, "/img/image.png", png)
+      bypass_favicon(bypass)
 
-      assert {:ok, [_, png_resp]} = BrowseyHttp.get_with_resources(url)
+      assert {:ok, [_ | images]} = BrowseyHttp.get_with_resources(url)
 
-      assert png_resp.final_uri == URI.parse("#{url}/img/image.png")
+      assert length(images) == 2
+      assert Enum.any?(images, &(&1.final_uri.path == "/favicon.ico"))
+
+      assert png_resp = Enum.find(images, &(&1.final_uri.path == "/img/image.png"))
+
       assert png_resp.headers["content-type"] == ["image/png"]
       assert png_resp.body == png
     end
@@ -501,6 +529,7 @@ defmodule BrowseyHttpTest do
           <link rel='stylesheet' href='/dir/app.css' />
           <link rel='stylesheet' href='dir/app.css' />
           <link rel='stylesheet' href='#{url}/dir/app.css' />
+          <link rel='icon shortcut' href='/favicon.png' />
         </head>
         <body>
           <img src='#{url}/img/image.png' />
@@ -518,9 +547,107 @@ defmodule BrowseyHttpTest do
       bypass_css(bypass, "/dir/app.css", css)
       bypass_js(bypass, "/javascript.js", js)
       bypass_png(bypass, "/img/image.png", png)
+      bypass_png(bypass, "/favicon.png", png)
 
       assert {:ok, responses} = BrowseyHttp.get_with_resources(url)
-      assert length(responses) == 4
+      assert length(responses) == 5
+
+      response_paths = Enum.map(responses, & &1.final_uri.path)
+
+      assert Enum.sort(response_paths) ==
+               Enum.sort(["/", "/dir/app.css", "/javascript.js", "/img/image.png", "/favicon.png"])
     end
+
+    test "handles failure to get the initial page" do
+      assert {:error, %ConnectionException{} = exception} =
+               BrowseyHttp.get_with_resources(@never_responding_localhost_url)
+
+      assert exception.uri == @never_responding_localhost_uri
+    end
+
+    test "handles failure to get resources", %{bypass: bypass, url: url} do
+      html = """
+      <html>
+        <head>
+          <link rel='stylesheet' href='/dir/app.css' />
+          <script src='#{@never_responding_localhost_url}' />
+        </head>
+        <body>OK</body>
+      </html>
+      """
+
+      bypass_html(bypass, "/", html)
+      bypass_404(bypass, "/dir/app.css", "Not Found")
+
+      assert {:ok, responses} = BrowseyHttp.get_with_resources(url, fetch_images?: false)
+      assert length(responses) == 3
+
+      [primary_resp | resource_resps] = responses
+      assert primary_resp.status == 200
+      assert primary_resp.body == html
+
+      {[connection_exception], [css_resp]} =
+        Enum.split_with(resource_resps, &match?(%ConnectionException{}, &1))
+
+      assert css_resp.final_uri.path == "/dir/app.css"
+      assert css_resp.status == 404
+
+      assert connection_exception.uri == @never_responding_localhost_uri
+    end
+
+    test "handles binary responses", %{bypass: bypass, url: url} do
+      png_binary = <<137, 80, 78, 71, 13, 10, 26, 10, 0>>
+      bypass_png(bypass, "/image.png", png_binary)
+
+      assert {:ok, [response]} = BrowseyHttp.get_with_resources("#{url}/image.png")
+
+      assert response.status == 200
+      assert response.body == png_binary
+    end
+
+    test "handles non-HTML responses", %{bypass: bypass, url: url} do
+      body = "This is not actually HTML"
+      bypass_html(bypass, "/", body)
+      bypass_favicon(bypass)
+
+      assert {:ok, [response, favicon]} = BrowseyHttp.get_with_resources(url)
+
+      assert response.status == 200
+      assert response.body == body
+
+      assert favicon.status == 200
+      assert favicon.headers["content-type"] == ["image/x-icon"]
+      assert is_binary(favicon.body)
+    end
+  end
+end
+
+defmodule BrowseyHttpSyncTest do
+  # Synchronous due to use of Patch
+  use ExUnit.Case, async: false
+  use Patch
+
+  import BrowseyHttp.BypassHelpers
+
+  setup do
+    bypass = Bypass.open()
+
+    %{
+      bypass: bypass,
+      url: "http://localhost:#{bypass.port}",
+      domain: "localhost:#{bypass.port}"
+    }
+  end
+
+  test "handles parse failure from Floki", %{bypass: bypass, url: url} do
+    Patch.patch(Floki, :parse_document, {:error, :parse_error})
+
+    body = "This is not actually HTML"
+    bypass_html(bypass, "/", body)
+
+    assert {:ok, [response]} = BrowseyHttp.get_with_resources(url)
+
+    assert response.status == 200
+    assert response.body == body
   end
 end

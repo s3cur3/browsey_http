@@ -5,10 +5,15 @@ defmodule BrowseyHttp do
   Browsey aims to behave as much like a real browser as possible, short of executing JavaScript.
   It's able to scrape sites that are notoriously difficult, including:
 
-  - LinkedIn
   - Amazon
+  - Google
+  - TicketMaster
+  - LinkedIn (at least for the first few requests per day per IP, after which even real
+    browsers will be shown the "auth wall")
   - Real estate sites including Zillow, Realtor.com, and Trulia
+  - OpenSea
   - Sites protected by Cloudflare
+  - Sites protected by PerimeterX/HUMAN Security
   - Sites protected by DataDome, including Reddit, AllTrails, and RealClearPolitics
 
   Plus, as a customer of Browsey, if you encounter a site Browsey can't scrape, we'll make
@@ -62,12 +67,14 @@ defmodule BrowseyHttp do
   Browsey makes a better *first* choice for your scraping needs. Then you can fall back to
   expensive third-party APIs when you encounter a site that really needs a headless browser.
   """
-  alias BrowseyHttp.Html
+  alias BrowseyHttp.ConnectionException
+  alias BrowseyHttp.SslException
   alias BrowseyHttp.TimeoutException
   alias BrowseyHttp.TooLargeException
+  alias BrowseyHttp.TooManyRedirectsException
   alias BrowseyHttp.Util
-
-  require Logger
+  alias BrowseyHttp.Util.Curl
+  alias BrowseyHttp.Util.Html
 
   @max_response_size_mb 5
   @max_response_size_bytes @max_response_size_mb * 1024 * 1024
@@ -75,13 +82,22 @@ defmodule BrowseyHttp do
   @type uri_or_url :: URI.t() | String.t()
   @type get_result :: {:ok, BrowseyHttp.Response.t()} | {:error, Exception.t()}
 
+  @type browser :: :chrome | :chrome_android | :edge | :safari
+
   @type http_get_option ::
           {:follow_redirects?, boolean()}
           | {:max_retries, non_neg_integer()}
-          | {:additional_headers, BrowseyHttp.Response.headers()}
+          # | {:additional_headers, BrowseyHttp.Response.headers()}
           | {:max_response_size_bytes, non_neg_integer() | :infinity}
           | {:receive_timeout, timeout()}
-          | {:force_brotli_support?, boolean()}
+          | {:browser, browser() | :random}
+
+  @available_browsers %{
+    android: "curl_chrome99_android",
+    chrome: "curl_chrome116",
+    edge: "curl_edge101",
+    safari: "curl_safari15_5"
+  }
 
   # Matches Chrome's behavior:
   # https://stackoverflow.com/questions/10895406/what-is-the-maximum-number-of-http-redirections-allowed-by-all-major-browsers
@@ -97,7 +113,7 @@ defmodule BrowseyHttp do
   ### Options
 
   - `:max_response_size_bytes`: The maximum size of the response body, in bytes, or `:infinity`.
-     If the response body exceeds this size, we'll raise a `TooLargeException`. This is important
+     If the response body exceeds this size, we'll return a `TooLargeException`. This is important
      so that unintentionally downloading, say, a huge video file doesn't run your server out
      of memory. Defaults to 5,242,880 (5 MiB).
   - `:follow_redirects?`: whether to follow redirects. Defaults to true, in which case the
@@ -105,14 +121,11 @@ defmodule BrowseyHttp do
      `:uri_sequence` field.
   - `:max_retries`: how many times to retry when the HTTP status code indicates an error.
      Defaults to 0.
-  - `:additional_headers`: headers we'll send (in addition to browser-imitating headers), in
-     Req's map format (a map from the header name to a list of values). See the
-     `BrowseyHttp.Response.headers()` type for more info.
-  - `:force_brotli_support?`: If true, we'll include Brotli in the list of accepted encodings.
-     By default, we do not advertise Brotli support, because initial requests to sites from
-     real browser do not.
   - `:receive_timeout`: The maximum time (in milliseconds) to wait to receive a response after
     connecting to the server. Defaults to 30,000 (30 seconds).
+  - `:browser`: One of `:chrome`, `:chrome_android`, `:edge`, `:safari`, or `:random`.
+    Defaults to `:chrome`, except for domains known to block our Chrome version, 
+    in which case a better default will be chosen.
 
   ### Examples
 
@@ -124,20 +137,34 @@ defmodule BrowseyHttp do
   """
   @spec get(uri_or_url(), [http_get_option()]) :: get_result()
   def get(url_or_uri, opts \\ []) do
-    {:ok, get!(url_or_uri, opts)}
-  rescue
-    e -> {:error, e}
+    case validate_url(url_or_uri) do
+      {:ok, %URI{} = uri} ->
+        start_time = DateTime.utc_now()
+        retries = Access.get(opts, :max_retries, 0)
+
+        Enum.reduce_while(0..retries, nil, fn attempt, _ ->
+          result = get_internal(uri, [], opts)
+          {error_or_ok, resp_or_exception} = result
+
+          if should_retry?(resp_or_exception) and attempt < retries do
+            Process.sleep(retry_delay_slow(attempt))
+            {:cont, result}
+          else
+            {:halt, {error_or_ok, finalize_response(resp_or_exception, start_time)}}
+          end
+        end)
+
+      error ->
+        error
+    end
   end
 
   @spec get!(uri_or_url(), [http_get_option()]) :: BrowseyHttp.Response.t() | no_return
   def get!(url_or_uri, opts \\ []) do
-    follow_redirects? = Keyword.get(opts, :follow_redirects?, true)
-    start_time = DateTime.utc_now()
-
-    url_or_uri
-    |> get_internal!([], opts)
-    |> Util.then_if(follow_redirects?, &follow_redirects!(&1, opts))
-    |> finalize_response(start_time)
+    case get(url_or_uri, opts) do
+      {:ok, resp} -> resp
+      {:error, exception} -> raise exception
+    end
   end
 
   @type resource_option ::
@@ -181,7 +208,7 @@ defmodule BrowseyHttp do
     loading resources from a site you didn't expect.
   """
   @spec get_with_resources(uri_or_url(), [http_get_option() | resource_option()]) ::
-          {:ok, [BrowseyHttp.Response.t() | resource_responses]} | {:error, Exception.t()}
+          {:ok, [BrowseyHttp.Response.t() | resource_responses()]} | {:error, Exception.t()}
   def get_with_resources(url_or_uri, opts \\ []) do
     case stream_with_resources(url_or_uri, opts) do
       {:ok, responses} -> {:ok, Enum.to_list(responses)}
@@ -195,7 +222,7 @@ defmodule BrowseyHttp do
   As with the non-streaming version, the first response will always be the initial resource.
   """
   @spec stream_with_resources(uri_or_url(), [http_get_option() | resource_option()]) ::
-          {:ok, Enumerable.t(BrowseyHttp.Response.t() | resource_responses)}
+          {:ok, Enumerable.t(BrowseyHttp.Response.t() | Exception.t())}
           | {:error, Exception.t()}
   def stream_with_resources(url_or_uri, opts \\ []) do
     case get(url_or_uri, opts) do
@@ -211,337 +238,130 @@ defmodule BrowseyHttp do
     end
   end
 
-  defp real_browser_headers(for_url, opts) do
-    host = URI.parse(for_url).host
+  @spec default_browser(uri_or_url()) :: browser()
+  def default_browser(%URI{} = uri) do
+    domain = Util.Uri.host_without_subdomains(uri)
+    Map.get(browser_default_overrides_by_domain(), domain, :chrome)
+  end
 
-    accept_encoding =
-      if opts[:force_brotli_support?] do
-        "gzip, deflate, br"
-      else
-        "gzip, deflate"
+  def default_browser(url) when is_binary(url) do
+    url
+    |> URI.parse()
+    |> default_browser()
+  end
+
+  defp browser_default_overrides_by_domain do
+    %{"realtor.com" => :android}
+  end
+
+  @spec get_internal(URI.t(), [URI.t()], Keyword.t()) ::
+          {:ok, BrowseyHttp.Response.t()} | {:error, Exception.t()}
+  defp get_internal(%URI{} = uri, prev_uris, opts) do
+    default_browser_for_host = default_browser(uri)
+
+    browser_script =
+      case Access.get(opts, :browser, default_browser_for_host) do
+        :random -> @available_browsers |> Map.values() |> Enum.random()
+        b when is_map_key(@available_browsers, b) -> Map.fetch!(@available_browsers, b)
+        _ -> Map.fetch!(@available_browsers, default_browser_for_host)
       end
 
-    Enum.random([
-      # Safari
-      %{
-        "Accept" => ["text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"],
-        "Accept-Encoding" => [accept_encoding],
-        "Accept-Language" => ["en-US,en;q=0.9"],
-        "Connection" => ["keep-alive"],
-        "Host" => [host],
-        "User-Agent" => [
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15"
-        ]
-      },
-      # Firefox
-      %{
-        "Accept" => [
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+    script = Application.app_dir(:browsey_http, ["priv", "curl", browser_script])
+
+    # TODO: Support opts[:additional_headers]
+    # Someday We could use the `:into` argument to stream and parse the request as it goes...
+
+    timeout = Access.get(opts, :timeout, :timer.seconds(30))
+    max_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
+
+    redirect_args =
+      if Access.get(opts, :follow_redirects?, true) do
+        "--location --max-redirs #{@max_redirects}"
+      else
+        ""
+      end
+
+    # TODO: Should we have a separate cookie file for every request?
+    tmp_dir = System.tmp_dir!()
+    cookie_file = Path.join(tmp_dir, "cookie-jar")
+
+    command =
+      Enum.join(
+        [
+          script,
+          "-v",
+          "\"#{to_string(uri)}\"",
+          redirect_args,
+          "--max-time #{timeout / 1_000}",
+          "--max-filesize #{max_bytes}",
+          "--cookie #{cookie_file}",
+          "--cookie-jar #{cookie_file}"
         ],
-        "Accept-Encoding" => [accept_encoding],
-        "Accept-Language" => ["en-US,en;q=0.5"],
-        "Connection" => ["keep-alive"],
-        "Host" => [host],
-        "Upgrade-Insecure-Requests" => ["1"],
-        "User-Agent" => [
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0"
-        ]
-      },
-      # Chrome
-      %{
-        "Accept" => [
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-        ],
-        "Accept-Encoding" => [accept_encoding],
-        "Accept-Language" => ["en-US,en;q=0.9"],
-        "Cache-Control" => ["max-age=0"],
-        "Connection" => ["keep-alive"],
-        "Host" => [host],
-        "Upgrade-Insecure-Requests" => ["1"],
-        "User-Agent" => [
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ]
-      }
-    ])
+        " "
+      )
+
+    case Util.Exec.exec(command, timeout + 5_000) do
+      {:ok, result} ->
+        body_parts = result[:stdout] || []
+        body = Enum.join(body_parts)
+
+        meta_parts = result[:stderr] || []
+        metadata = Enum.join(meta_parts)
+
+        {:ok, curl_output_to_response(body, metadata, uri, prev_uris)}
+
+      # TODO: Parse the exit code (see section "EXIT CODES" of the cURL man page)
+      {:error, error_kwlist} ->
+        status = Access.fetch!(error_kwlist, :exit_status)
+
+        case status do
+          s when s in [6, 1536] -> {:error, ConnectionException.could_not_resolve_host(uri)}
+          s when s in [7, 1792] -> {:error, ConnectionException.could_not_connect(uri)}
+          s when s in [28, 7168] -> {:error, TimeoutException.timed_out(uri, timeout)}
+          s when s in [35, 15_360] -> {:error, SslException.new(uri)}
+          s when s in [47, 12_032] -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
+          s when s in [63, 16_128] -> {:error, TooLargeException.new(uri, max_bytes)}
+          _ -> {:error, ConnectionException.unknown_error(uri, status)}
+        end
+    end
   end
 
-  @spec get_internal!(uri_or_url(), [URI.t()], Keyword.t()) ::
-          BrowseyHttp.Response.t() | no_return
-  defp get_internal!(url_or_uri, prev_uris, opts) do
-    headers =
-      url_or_uri
-      |> real_browser_headers(opts)
-      |> Map.merge(opts[:additional_headers] || %{})
-
-    max_retries = Keyword.get(opts, :max_retries, 0)
-    receive_timeout = Access.get(opts, :timeout, :timer.seconds(30))
-
-    [
-      # If we ever go back to Finch as the request runner instead of Hackney/HTTPoison,
-      # we'll need to run this through url_encode/1.
-      url: url_or_uri,
-      headers: headers,
-      # Custom headers will specify compression
-      compressed: false,
-      receive_timeout: receive_timeout,
-      # We use our own redirect handling
-      redirect: false,
-      retry: max_retries > 0 and (&should_retry?/2),
-      retry_delay: &retry_delay_slow/1,
-      max_retries: max_retries,
-      # into: &accumulate_response!/2,
-      adapter: &run_request!(&1, opts)
-    ]
-    |> Req.new()
-    |> Req.Request.append_request_steps(headers: &replace_headers_case_sensitive(&1, headers))
-    |> Req.Request.append_response_steps(iodata_to_binary: &concat_iodata/1)
-    |> Req.Request.append_response_steps(decompress_brotli: &decompress_brotli/1)
-    |> Req.Request.append_response_steps(decompress: &Req.Steps.decompress_body/1)
-    |> Req.get!()
-    |> browsey_response_from_req(url_or_uri, prev_uris)
-  end
-
-  defp browsey_response_from_req(%Req.Response{} = resp, url_or_uri, prev_uris) do
-    uri = URI.parse(url_or_uri)
+  defp curl_output_to_response(curl_output, metadata, %URI{} = uri, prev_uris) do
+    %{headers: headers, uris: uris, status: status} = Curl.parse_metadata(metadata, uri)
 
     %BrowseyHttp.Response{
-      body: resp.body,
-      headers: resp.headers,
-      status: resp.status,
-      final_uri: uri,
-      uri_sequence: [uri | prev_uris],
+      body: curl_output,
+      headers: headers,
+      status: status,
+      final_uri: List.last(uris),
+      uri_sequence: prev_uris ++ uris,
       runtime_ms: 0
     }
   end
 
-  defp run_request!(%Req.Request{} = request, opts) do
-    headers = BrowseyHttp.Response.headers_to_proplist(request.headers)
-    timeout = request.options.receive_timeout
-    max_size_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
-
-    # Hackney does not rewrite foo.com?bar=baz to foo.com/?bar=baz, so we do it ourselves.
-    uri =
-      case request.url do
-        %URI{path: nil} = uri when byte_size(uri.query) > 0 or byte_size(uri.fragment) > 0 ->
-          %{uri | path: "/"}
-
-        uri ->
-          uri
-      end
-
-    url = to_string(uri)
-
-    fn ->
-      try do
-        # Hackney, unlike Finch, does not forcibly downcase our header names.
-        # Cloudflare uses this as a huge signal as to whether or not we're a bot.
-        case HTTPoison.get(url, headers,
-               max_body_length: max_size_bytes,
-               recv_timeout: timeout + 200,
-               stream_to: self(),
-               async: :once
-             ) do
-          {:ok, %HTTPoison.AsyncResponse{} = async_response} ->
-            try do
-              deadline = Util.Time.ms_from_now(timeout)
-
-              {request,
-               accumulate_req_response(
-                 async_response,
-                 deadline,
-                 request.url,
-                 max_size_bytes
-               )}
-            after
-              :hackney.stop_async(async_response.id)
-            end
-
-          {:error, %HTTPoison.Error{reason: reason}} ->
-            {request, RuntimeError.exception(inspect(reason))}
-        end
-      catch
-        # This is the error Hackney raises when exceeding the max response size
-        _, %ErlangError{original: :data_error, reason: nil} ->
-          {request, TooLargeException.response_body_exceeds_bytes(max_size_bytes, request.url)}
-
-        _, reason ->
-          {request, RuntimeError.exception(inspect(reason))}
-      end
-    end
-    |> Util.DoNotDisturb.run_silent(timeout + 1_000)
-    |> case do
-      {:ok, result} -> result
-      {:error, :timeout} -> {request, TimeoutException.timed_out(uri, timeout)}
-    end
-  end
-
-  @spec accumulate_req_response(
-          HTTPoison.AsyncResponse.t(),
-          DateTime.t(),
-          URI.t(),
-          non_neg_integer() | :infinity,
-          Req.Response.t()
-        ) ::
-          Req.Response.t() | Exception.t()
-  defp accumulate_req_response(
-         %HTTPoison.AsyncResponse{id: response_id} = resp,
-         %DateTime{} = deadline,
-         %URI{} = uri,
-         max_size_bytes,
-         out \\ %Req.Response{status: 200, headers: %{}, body: []}
-       ) do
-    receive do
-      %HTTPoison.AsyncStatus{code: status, id: ^response_id} ->
-        # TODO: Handle error result
-        _ = HTTPoison.stream_next(resp)
-        accumulate_req_response(resp, deadline, uri, max_size_bytes, %{out | status: status})
-
-      %HTTPoison.AsyncHeaders{headers: headers, id: ^response_id} ->
-        map_headers = BrowseyHttp.Response.proplist_to_headers(headers)
-
-        with true <- is_integer(max_size_bytes),
-             [bytes_str | _] <- map_headers["content-length"],
-             {bytes, ""} <- Integer.parse(bytes_str),
-             true <- bytes > max_size_bytes do
-          # TODO: Telemetry to observe that we aborted
-          TooLargeException.content_length_exceeded(bytes, max_size_bytes, uri)
-        else
-          _ ->
-            # TODO: Handle error result
-            _ = HTTPoison.stream_next(resp)
-            updated_resp = %{out | headers: map_headers}
-            accumulate_req_response(resp, deadline, uri, max_size_bytes, updated_resp)
-        end
-
-      %HTTPoison.AsyncChunk{chunk: chunk, id: ^response_id} ->
-        # Produces an improper list, but it's okay! It's an iolist!
-        # https://dorgan.netlify.app/posts/2021/03/making-sense-of-elixir-(improper)-lists/
-        appended = [out.body | chunk]
-
-        if is_integer(max_size_bytes) and :erlang.iolist_size(appended) > max_size_bytes do
-          # TODO: Telemetry to observe that we aborted
-          TooLargeException.response_body_exceeds_bytes(max_size_bytes, uri)
-        else
-          # TODO: Handle error result
-          _ = HTTPoison.stream_next(resp)
-          accumulate_req_response(resp, deadline, uri, max_size_bytes, %{out | body: appended})
-        end
-
-      %HTTPoison.AsyncEnd{id: ^response_id} ->
-        out
-    after
-      # Irritatingly, it seems we can't use a variable timeout
-      # (produced by `Util.Time.ms_until(deadline)`) here directly
-      100 ->
-        if Util.Time.deadline_passed?(deadline) do
-          case out.headers["content-type"] do
-            ["multipart/x-mixed-replace" <> _ | _] ->
-              # This is a potentially infinitely streaming response, so it not having ended
-              # is not an error.
-              out
-
-            _ ->
-              TimeoutException.timed_out(uri)
-          end
-        else
-          accumulate_req_response(resp, deadline, uri, max_size_bytes, out)
-        end
-    end
-  end
-
   defp finalize_response(%BrowseyHttp.Response{} = resp, start_time) do
     runtime_ms = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
-    %{resp | uri_sequence: Enum.reverse(resp.uri_sequence), runtime_ms: runtime_ms}
+    %{resp | runtime_ms: runtime_ms}
   end
 
-  defp follow_redirects!(resp, opts, depth \\ 1)
+  defp finalize_response(error, _), do: error
 
-  defp follow_redirects!(%BrowseyHttp.Response{status: status} = resp, opts, depth)
-       when status in 300..399 and depth <= @max_redirects do
-    case redirect_to_url(resp.headers, resp.final_uri) do
-      {:ok, %URI{} = redirect_to} ->
-        cookie_headers = resp.headers["set-cookie"] || []
-
-        opts =
-          Keyword.update(
-            opts,
-            :additional_headers,
-            %{"cookie" => cookie_headers},
-            &Map.put(&1, "cookie", cookie_headers)
-          )
-
-        redirect_to
-        |> get_internal!(resp.uri_sequence, opts)
-        |> follow_redirects!(opts, depth + 1)
-
-      _ ->
-        resp
-    end
-  end
-
-  defp follow_redirects!(%BrowseyHttp.Response{} = resp, _, _), do: resp
-
-  defp redirect_to_url(headers, relative_to_url) when is_binary(relative_to_url) do
-    redirect_to_url(headers, URI.parse(relative_to_url))
-  end
-
-  defp redirect_to_url(headers, %URI{} = relative_to) do
-    case headers["location"] do
-      [url | _] -> {:ok, URI.merge(relative_to, URI.parse(url))}
-      _ -> :error
-    end
-  end
-
-  defp replace_headers_case_sensitive(%Req.Request{} = req, headers) do
-    %{req | headers: headers}
-  end
-
-  # defp accumulate_response!({:data, chunk}, {req, resp}) do
-  #   resp = Req.Response.update_private(resp, :acc_bytes, 0, &(&1 + byte_size(chunk)))
-
-  #   if resp.private[:acc_bytes] <= @max_response_size_bytes do
-  #     {:cont, {req, append_chunk(resp, chunk)}}
-  #   else
-  #     # TODO: Telemetry to observe that we aborted
-  #     raise TooLargeException, message: "Response body exceeds #{@max_response_size_mb} MB"
-  #   end
-  # end
-
-  # defp append_chunk(%Req.Response{body: ""} = resp, chunk), do: %{resp | body: [chunk]}
-  # defp append_chunk(%Req.Response{body: body} = resp, chunk), do: %{resp | body: body ++ [chunk]}
-
-  defp concat_iodata({%Req.Request{} = request, %Req.Response{} = response}) do
-    {%{request | into: nil}, %{response | body: IO.iodata_to_binary(response.body)}}
-  end
-
-  defp decompress_brotli({%Req.Request{} = request, %Req.Response{} = response}) do
-    content_encodings =
-      response
-      |> Req.Response.get_header("content-encoding")
-      |> Enum.join(",")
-      |> String.split(",", trim: true)
-      |> Enum.uniq()
-      |> Enum.map(&String.trim/1)
-
-    case content_encodings do
-      ["br" | tail] ->
-        updated_headers = Map.put(response.headers, "content-encoding", tail)
-        {:ok, decompressed} = ExBrotli.decompress(response.body)
-        {request, %{response | body: decompressed, headers: updated_headers}}
-
-      _ ->
-        {request, response}
-    end
-  end
-
-  defp should_retry?(_req, %Req.Response{status: status}) do
+  defp should_retry?(%BrowseyHttp.Response{status: status}) do
     status >= 400
   end
 
-  defp should_retry?(_req, %{__exception__: true, reason: :timeout}), do: true
-  defp should_retry?(_req, %{__exception__: true, reason: :econnrefused}), do: true
-  defp should_retry?(_req, %{__exception__: true}), do: false
+  defp should_retry?(%TimeoutException{}), do: true
+  defp should_retry?(%ConnectionException{}), do: true
 
+  defp should_retry?(%SslException{}), do: false
+  defp should_retry?(%TooLargeException{}), do: false
+  defp should_retry?(%TooManyRedirectsException{}), do: false
+
+  @spec stream_embedded_resources(
+          BrowseyHttp.Response.t(),
+          [http_get_option() | resource_option()]
+        ) ::
+          Enumerable.t(BrowseyHttp.Response.t() | Exception.t())
   defp stream_embedded_resources(%BrowseyHttp.Response{final_uri: uri} = resp, opts) do
     case Floki.parse_document(resp.body) do
       {:ok, parsed} ->
@@ -553,7 +373,7 @@ defmodule BrowseyHttp do
         uris_to_fetch =
           parsed
           |> Html.urls_a_browser_would_load_immediately(opts)
-          |> MapSet.new(&BrowseyHttp.Uri.canonical_uri(&1, uri))
+          |> MapSet.new(&Util.Uri.canonical_uri(&1, uri))
           |> MapSet.difference(ignore_uris)
 
         uris_to_fetch
@@ -575,9 +395,27 @@ defmodule BrowseyHttp do
     end
   end
 
+  @spec crawl_resources?(BrowseyHttp.Response.t(), [resource_option()]) ::
+          boolean()
   defp crawl_resources?(%BrowseyHttp.Response{} = resp, opts) do
     %BrowseyHttp.Response{final_uri: %URI{} = final, uri_sequence: [%URI{} = first | _]} = resp
     opts[:load_resources_when_redirected_off_host?] || final.host == first.host
+  end
+
+  defp validate_url(url) when is_binary(url) do
+    url
+    |> URI.parse()
+    |> validate_url()
+  end
+
+  defp validate_url(%URI{} = uri) do
+    case uri do
+      %URI{scheme: scheme, host: host} when byte_size(host) > 0 and scheme in ["http", "https"] ->
+        {:ok, uri}
+
+      _ ->
+        {:error, ConnectionException.invalid_url(uri)}
+    end
   end
 
   # TODO: Make this configurable

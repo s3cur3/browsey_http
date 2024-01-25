@@ -3,6 +3,10 @@ defmodule BrowseyHttp.ScrapingTest do
 
   doctest BrowseyHttp
 
+  setup do
+    Process.sleep(3_000)
+  end
+
   @tag scraping_todo: true
   test "scrapes Twitter" do
     url = "https://twitter.com/FaizaanShamsi/status/1747641905981100212"
@@ -71,17 +75,67 @@ defmodule BrowseyHttp.ScrapingTest do
   end
 
   @tag local_integration: true
-  test "scrapes Realtor.com" do
-    url =
-      "https://www.realtor.com/realestateandhomes-detail/11409-Meadow-Ln_Leawood_KS_66211_M86302-48887"
-
-    assert scrape_text(url) =~ "11409 Meadow Ln, Leawood"
-  end
-
-  @tag local_integration: true
   test "scrapes Trulia" do
     url = "https://www.trulia.com/home/2858-briarcliff-rd-atlanta-ga-30329-14543068"
     assert scrape_text(url) =~ "2858 Briarcliff Rd"
+  end
+
+  describe "sites protected by PerimeterX/HUMAN security" do
+    @tag local_integration: true
+    test "scrapes Realtor.com" do
+      url =
+        "https://www.realtor.com/realestateandhomes-detail/11409-Meadow-Ln_Leawood_KS_66211_M86302-48887"
+
+      assert scrape_text(url) =~ "11409 Meadow Ln, Leawood"
+    end
+
+    @tag local_integration: true
+    test "scrapes Sweetwater.com" do
+      url = "https://www.sweetwater.com/shop/guitars/electric-guitars/"
+      assert scrape_text(url) =~ "Electric Guitars Buying Guide"
+    end
+
+    @tag local_integration: true
+    test "scrapes Build.com" do
+      url = "https://www.build.com"
+      assert scrape_text(url) =~ "Shop All Departments"
+    end
+  end
+
+  @tag local_integration: true
+  test "scrapes Udemy" do
+    url = "https://www.udemy.com/course/the-complete-web-development-bootcamp/"
+    assert scrape_text(url) =~ "Welcome to the Complete Web Development Bootcamp"
+  end
+
+  @tag local_integration: true
+  test "scrapes OpenSea" do
+    url = "https://opensea.io/rankings/trending"
+    assert scrape_text(url) =~ "Collection stats"
+  end
+
+  @tag local_integration: true
+  test "scrapes TicketMaster" do
+    url = "https://www.ticketmaster.com/disney-on-ice-presents-into-the-tickets/artist/2374998"
+    text = scrape_text(url)
+    assert text =~ "Reviews ("
+    assert text =~ "Disney On Ice presents Into the Magic Tickets"
+  end
+
+  @tag local_integration: true
+  test "scrapes Google" do
+    url = "https://www.google.com/search?q=testing"
+    text = scrape_text(url)
+    assert text =~ "www.testing.com"
+  end
+
+  @tag local_integration: true
+  test "scrapes LinkedIn" do
+    url = "https://www.linkedin.com/in/bruce-tate"
+    text = scrape_text(url)
+    assert text =~ "Bruce Tate"
+    assert text =~ "Chattanooga, Tennessee"
+    assert text =~ "Experience & Education"
   end
 
   defp scrape_text(url) do

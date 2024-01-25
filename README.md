@@ -5,10 +5,15 @@ BrowseyHttp is a browser-imitating HTTP client for scraping websites that resist
 Browsey aims to behave as much like a real browser as possible, short of executing JavaScript.
 It's able to scrape sites that are notoriously difficult, including:
 
-- LinkedIn
 - Amazon
+- Google
+- Udemy
+- TicketMaster
+- LinkedIn (at least for the first few requests per day per IP, after which even real browsers will be shown the "auth wall")
 - Real estate sites including Zillow, Realtor.com, and Trulia
+- OpenSea
 - Sites protected by Cloudflare
+- Sites protected by PerimeterX/HUMAN Security
 - Sites protected by DataDome, including Reddit, AllTrails, and RealClearPolitics
 
 Plus, as a customer of Browsey, if you encounter a site Browsey can't scrape, we'll make

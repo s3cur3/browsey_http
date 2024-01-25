@@ -26,6 +26,7 @@ defmodule BrowseyHttp.MixProject do
         "check.fast": :test,
         coveralls: :test,
         "coveralls.detail": :test,
+        "coveralls.json": :test,
         "coveralls.html": :test,
         dialyzer: :dev,
         "test.all": :test
@@ -39,8 +40,7 @@ defmodule BrowseyHttp.MixProject do
           :unmatched_returns,
           :error_handling,
           :extra_return,
-          :missing_return,
-          :underspecs
+          :missing_return
         ],
         # Error out when an ignore rule is no longer useful so we can remove it
         list_unused_filters: true
@@ -48,12 +48,10 @@ defmodule BrowseyHttp.MixProject do
     ]
   end
 
-  # Configuration for the OTP application.
-  #
-  # Type `mix help compile.app` for more information.
   def application do
     [
-      extra_applications: [:logger]
+      mod: {BrowseyHttp.Application, []},
+      included_applications: [:erlexec]
     ]
   end
 
@@ -69,7 +67,7 @@ defmodule BrowseyHttp.MixProject do
   defp package do
     # These are the default files included in the package
     [
-      files: ["lib", "mix.exs", "README.md", "CHANGELOG.md"],
+      files: ["lib", "mix.exs", "README.md", "CHANGELOG.md", "priv/curl"],
       maintainers: ["Tyler Young"],
       licenses: ["Commercial"],
       links: %{"GitHub" => @source_url}
@@ -86,26 +84,23 @@ defmodule BrowseyHttp.MixProject do
   defp deps do
     [
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-      {:bypass, "~> 2.1", only: [:test]},
-      {:dialyxir, "~> 1.2", only: [:dev, :test], runtime: false},
       {:domainatrex, "~> 3.0"},
+      {:erlexec, "~> 2.0"},
       {:floki, ">= 0.30.0"},
-      {:httpoison, "~> 2.0"},
       # Faster HTML parser for Floki written in Rust
-      # I'm getting a NIF panick using it... see Html5ever in config.exs.
+      # I'm getting a NIF panic using it... see Html5ever in config.exs.
       # {:html5ever, "~> 0.15.0"},
-      {:jason, "~> 1.2"},
-      {:req, "~> 0.4"},
       {:typed_struct, "~> 0.3.0", runtime: false},
-
-      # Decompression
-      {:ezstd, "~> 1.0"},
-      {:ex_brotli, "~> 0.4"},
 
       # Code quality
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.2", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18.0", only: [:dev, :test], runtime: false},
-      {:styler, "~> 0.11", only: [:dev, :test], runtime: false}
+      {:styler, "~> 0.11", only: [:dev, :test], runtime: false},
+
+      # Testing
+      {:bypass, "~> 2.1", only: [:test]},
+      {:patch, "~> 0.13.0", only: [:test]}
     ]
   end
 
@@ -130,7 +125,7 @@ defmodule BrowseyHttp.MixProject do
       ],
       "check.quality": [
         "format --check-formatted",
-        "credo",
+        "credo --strict",
         "check.circular",
         "check.dialyzer"
       ],

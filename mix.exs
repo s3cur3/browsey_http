@@ -127,7 +127,7 @@ defmodule BrowseyHttp.MixProject do
       ],
       "check.quality": [
         "format --check-formatted",
-        "credo",
+        "credo --strict",
         "check.circular",
         "check.dialyzer"
       ],

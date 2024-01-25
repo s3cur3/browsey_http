@@ -174,7 +174,7 @@ defmodule BrowseyHttpTest do
 
   test "supports timeouts", %{bypass: bypass, url: url} do
     Bypass.stub(bypass, "GET", "/", fn conn ->
-      Process.sleep(1_000)
+      Process.sleep(10_000)
       Plug.Conn.resp(conn, 200, "OK")
     end)
 
@@ -188,7 +188,7 @@ defmodule BrowseyHttpTest do
 
     assert {:ok, %BrowseyHttp.Response{} = response} = BrowseyHttp.get(url, browser: :unsupported)
     assert response.status == 200
-      assert response.final_uri == URI.parse(url <> "/")
+    assert response.final_uri == URI.parse(url <> "/")
   end
 
   describe "retrying" do

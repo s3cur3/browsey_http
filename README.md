@@ -7,6 +7,7 @@ It's able to scrape sites that are notoriously difficult, including:
 
 - LinkedIn
 - Amazon
+- Google
 - Udemy
 - TicketMaster
 - Real estate sites including Zillow, Realtor.com, and Trulia

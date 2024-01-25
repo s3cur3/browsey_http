@@ -7,6 +7,7 @@ defmodule BrowseyHttp do
 
   - LinkedIn
   - Amazon
+  - Google
   - TicketMaster
   - Real estate sites including Zillow, Realtor.com, and Trulia
   - OpenSea
@@ -73,8 +74,6 @@ defmodule BrowseyHttp do
   alias BrowseyHttp.Util
   alias BrowseyHttp.Util.Curl
   alias BrowseyHttp.Util.Html
-
-  require Logger
 
   @max_response_size_mb 5
   @max_response_size_bytes @max_response_size_mb * 1024 * 1024
@@ -268,13 +267,8 @@ defmodule BrowseyHttp do
 
     script = Application.app_dir(:browsey_http, ["priv", "curl", browser_script])
 
-    # TODO: Parse out headers (and pass -v to the script)
     # TODO: Support opts[:additional_headers]
-    # TODO: Support retries
-    # TODO: Don't follow redirects if we're not supposed to
     # Someday We could use the `:into` argument to stream and parse the request as it goes...
-
-    _ = :exec.start()
 
     timeout = Access.get(opts, :timeout, :timer.seconds(30))
     max_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
@@ -295,7 +289,7 @@ defmodule BrowseyHttp do
         [
           script,
           "-v",
-          to_string(uri),
+          "\"#{to_string(uri)}\"",
           redirect_args,
           "--max-time #{timeout / 1_000}",
           "--max-filesize #{max_bytes}",

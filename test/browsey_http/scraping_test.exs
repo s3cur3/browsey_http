@@ -75,17 +75,31 @@ defmodule BrowseyHttp.ScrapingTest do
   end
 
   @tag local_integration: true
-  test "scrapes Realtor.com, protected by PerimeterX" do
-    url =
-      "https://www.realtor.com/realestateandhomes-detail/11409-Meadow-Ln_Leawood_KS_66211_M86302-48887"
-
-    assert scrape_text(url) =~ "11409 Meadow Ln, Leawood"
-  end
-
-  @tag local_integration: true
   test "scrapes Trulia" do
     url = "https://www.trulia.com/home/2858-briarcliff-rd-atlanta-ga-30329-14543068"
     assert scrape_text(url) =~ "2858 Briarcliff Rd"
+  end
+
+  describe "sites protected by PerimeterX/HUMAN security" do
+    @tag local_integration: true
+    test "scrapes Realtor.com" do
+      url =
+        "https://www.realtor.com/realestateandhomes-detail/11409-Meadow-Ln_Leawood_KS_66211_M86302-48887"
+
+      assert scrape_text(url) =~ "11409 Meadow Ln, Leawood"
+    end
+
+    @tag local_integration: true
+    test "scrapes Sweetwater.com" do
+      url = "https://www.sweetwater.com/shop/guitars/electric-guitars/"
+      assert scrape_text(url) =~ "Read our Electric Guitars Buying Guide"
+    end
+
+    @tag local_integration: true
+    test "scrapes Build.com" do
+      url = "https://www.sweetwater.com/shop/guitars/electric-guitars/"
+      assert scrape_text(url) =~ "Shop All Departments"
+    end
   end
 
   @tag local_integration: true
@@ -106,6 +120,22 @@ defmodule BrowseyHttp.ScrapingTest do
     text = scrape_text(url)
     assert text =~ "Reviews ("
     assert text =~ "Disney On Ice presents Into the Magic Tickets"
+  end
+
+  @tag local_integration: true
+  test "scrapes Google" do
+    url = "https://www.google.com/search?q=testing"
+    text = scrape_text(url)
+    assert text =~ "www.testing.com"
+  end
+
+  @tag local_integration: true
+  test "scrapes LinkedIn" do
+    url = "https://www.linkedin.com/in/bruce-tate"
+    text = scrape_text(url)
+    assert text =~ "Bruce Tate"
+    assert text =~ "Chattanooga, Tennessee"
+    assert text =~ "Experience & Education"
   end
 
   @tag local_integration: true

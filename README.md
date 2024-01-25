@@ -69,7 +69,7 @@ expensive third-party APIs when you encounter a site that really needs a headles
 
 ## Usage
 
-Once installed, you can crawl a single page using [`BrowseyHttp.get/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.1/BrowseyHttp.html#get/2):
+Once installed, you can crawl a single page using [`BrowseyHttp.get/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.3/BrowseyHttp.html#get/2):
 
 ```elixir
 case BrowseyHttp.get("https://www.example.com") do
@@ -79,7 +79,7 @@ end
 ```
 
 Or you can crawl a page *plus* all the resources it embeds (images, CSS, JavaScript) 
-in parallel using [`BrowseyHttp.get_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.1/BrowseyHttp.html#get_with_resources/2):
+in parallel using [`BrowseyHttp.get_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.3/BrowseyHttp.html#get_with_resources/2):
 
 ```elixir
 case BrowseyHttp.get_with_resources("https://www.example.com") do
@@ -92,6 +92,7 @@ case BrowseyHttp.get_with_resources("https://www.example.com") do
 end
 ```
 
-You can also get the additional resources as a stream via [`BrowseyHttp.stream_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.1/BrowseyHttp.html#stream_with_resources/2).
+You can also get the additional resources as a [Stream](https://hexdocs.pm/elixir/Stream.html)
+via [`BrowseyHttp.stream_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.3/BrowseyHttp.html#stream_with_resources/2).
 
 See the docs linked above for a breakdown of the available options to these functions.

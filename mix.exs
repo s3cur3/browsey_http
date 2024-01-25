@@ -26,6 +26,7 @@ defmodule BrowseyHttp.MixProject do
         "check.fast": :test,
         coveralls: :test,
         "coveralls.detail": :test,
+        "coveralls.json": :test,
         "coveralls.html": :test,
         dialyzer: :dev,
         "test.all": :test

@@ -262,7 +262,7 @@ defmodule BrowseyHttp do
       case Access.get(opts, :browser, default_browser_for_host) do
         :random -> @available_browsers |> Map.values() |> Enum.random()
         b when is_map_key(@available_browsers, b) -> Map.fetch!(@available_browsers, b)
-        _ -> default_browser_for_host
+        _ -> Map.fetch!(@available_browsers, default_browser_for_host)
       end
 
     script = Application.app_dir(:browsey_http, ["priv", "curl", browser_script])

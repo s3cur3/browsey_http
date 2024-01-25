@@ -183,6 +183,14 @@ defmodule BrowseyHttpTest do
     assert exception.timeout_ms == 1
   end
 
+  test "ignores unknown browsers", %{bypass: bypass, url: url} do
+    bypass_html(bypass, "/", "OK")
+
+    assert {:ok, %BrowseyHttp.Response{} = response} = BrowseyHttp.get(url, browser: :unsupported)
+    assert response.status == 200
+      assert response.final_uri == URI.parse(url <> "/")
+  end
+
   describe "retrying" do
     @tag capture_log: true
     test "retries up to max_retries", %{bypass: bypass, url: url} do

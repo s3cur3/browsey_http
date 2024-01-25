@@ -48,6 +48,31 @@ defmodule BrowseyHttp.CurlTest do
     assert status == 401
   end
 
+  test "copes with missing status" do
+    stderr_output = """
+      % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                     Dload  Upload   Total   Spent    Left  Speed
+      0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:59554...
+    * Connected to localhost (127.0.0.1) port 59554 (#0)
+    < HTTP/1.1 101 Switching Protocols
+    < connection: Upgrade
+    < upgrade: h2c
+    < HTTP/2 noninteger!
+    < foo: bar: baz
+    < server: Cowboy
+    * Connection #0 to host localhost left intact
+    """
+
+    assert %{headers: headers, status: status} = Curl.parse_metadata(stderr_output)
+
+    assert headers == %{
+             "foo" => ["bar: baz"],
+             "server" => ["Cowboy"]
+           }
+
+    assert is_nil(status)
+  end
+
   test "parses redirects" do
     stderr_output = """
       % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current

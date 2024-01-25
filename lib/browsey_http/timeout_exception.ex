@@ -7,5 +7,6 @@ defmodule BrowseyHttp.TimeoutException do
   end
 
   defp format_msg(max_ms) when max_ms < 1_000, do: "Timed out after #{max_ms} milliseconds"
+  defp format_msg(1000), do: "Timed out after 1 second"
   defp format_msg(max_ms), do: "Timed out after #{max_ms / 1_000} seconds"
 end

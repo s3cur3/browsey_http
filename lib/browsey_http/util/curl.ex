@@ -1,15 +1,34 @@
 defmodule BrowseyHttp.Util.Curl do
   @moduledoc false
+  use TypedStruct
+
   alias BrowseyHttp.Util
 
-  @spec parse_metadata(String.t(), URI.t()) :: %{
-          headers: BrowseyHttp.Response.headers(),
-          uris: [URI.t()],
-          status: integer() | nil
-        }
+  typedstruct module: Result, enforce: true do
+    field :headers, BrowseyHttp.Response.headers()
+    field :uris, [URI.t()]
+    field :status, integer() | nil
+  end
+
+  typedstruct module: Error, enforce: true do
+    field :code, integer()
+    field :message, String.t()
+  end
+
+  @spec parse_metadata(String.t(), URI.t()) ::
+          {:ok, Result.t()} | {:error, Error.t()}
   def parse_metadata(stderr_output, %URI{} = original_uri) do
     stderr_lines = String.split(stderr_output, ["\n", "\r\n"])
 
+    if error = parse_error(stderr_lines) do
+      {:error, error}
+    else
+      {:ok, parse_result(stderr_lines, original_uri)}
+    end
+  end
+
+  @spec parse_result([String.t()], URI.t()) :: Result.t()
+  defp parse_result(stderr_lines, %URI{} = original_uri) do
     responses =
       stderr_lines
       |> Enum.flat_map(&split_smooshed_lines(&1, "< HTTP/"))
@@ -70,18 +89,32 @@ defmodule BrowseyHttp.Util.Curl do
     last_response = List.last(responses)
 
     last_status =
-      last_response
-      |> Enum.filter(&String.starts_with?(&1, "< HTTP/"))
-      |> List.last()
-      |> String.split(" ", parts: 4)
-      |> Enum.at(2)
-      |> Util.Integer.from_string()
-      |> case do
-        {:ok, status} -> status
-        _ -> nil
+      if last_response do
+        last_response
+        |> Enum.filter(&String.starts_with?(&1, "< HTTP/"))
+        |> List.last()
+        |> String.split(" ", parts: 4)
+        |> Enum.at(2)
+        |> Util.Integer.from_string()
+        |> case do
+          {:ok, status} -> status
+          _ -> nil
+        end
       end
 
-    %{headers: parse_headers(last_response), uris: uris, status: last_status}
+    %Result{headers: parse_headers(last_response), uris: uris, status: last_status}
+  end
+
+  @spec parse_error([String.t()]) :: Error.t() | nil
+  defp parse_error(stderr_lines) when is_list(stderr_lines) do
+    Enum.find_value(stderr_lines, fn line ->
+      with [_, code, message] <- Regex.run(~r/^curl: \((\d+)\) (.+)$/, line),
+           {:ok, code} <- Util.Integer.from_string(code) do
+        %Error{code: code, message: message}
+      else
+        _ -> nil
+      end
+    end)
   end
 
   defp split_smooshed_lines(line, token) do
@@ -107,8 +140,10 @@ defmodule BrowseyHttp.Util.Curl do
     |> Enum.reverse()
   end
 
-  defp parse_headers(stderr_response) do
-    stderr_response
+  defp parse_headers(nil), do: %{}
+
+  defp parse_headers(stderr_lines) when is_list(stderr_lines) do
+    stderr_lines
     |> Util.Enum.map_compact(fn line ->
       line
       |> String.trim_leading("< ")

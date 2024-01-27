@@ -10,34 +10,37 @@ defmodule BrowseyHttp.ConnectionException do
 
   @spec could_not_connect(URI.t()) :: t()
   def could_not_connect(%URI{} = uri) do
-    error_code = 7
-
     %__MODULE__{
       message: "Could not connect to host",
       uri: uri,
-      error_code: error_code
+      error_code: 7
     }
   end
 
   @spec invalid_url(URI.t()) :: t()
   def invalid_url(%URI{} = uri) do
-    error_code = 6
-
     %__MODULE__{
       message: "Invalid URL",
       uri: uri,
-      error_code: error_code
+      error_code: 3
     }
   end
 
   @spec could_not_resolve_host(URI.t()) :: t()
   def could_not_resolve_host(%URI{} = uri) do
-    error_code = 6
-
     %__MODULE__{
       message: "Could not resolve host",
       uri: uri,
-      error_code: error_code
+      error_code: 6
+    }
+  end
+
+  @spec failed_to_receive(URI.t()) :: t()
+  def failed_to_receive(%URI{} = uri) do
+    %__MODULE__{
+      message: "Failure while receiving data",
+      uri: uri,
+      error_code: 56
     }
   end
 

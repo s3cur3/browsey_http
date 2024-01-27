@@ -3,6 +3,48 @@ defmodule BrowseyHttp.Util.CurlTest do
 
   alias BrowseyHttp.Util.Curl
 
+  describe "processes error codes" do
+    test "handles well-formed error messages" do
+      stderr_output = """
+      * Closing connection 0
+      curl: (7) Failed to connect to example.com port 443 after 100 ms: Couldn't
+      """
+
+      uri = URI.parse("https://example.com")
+      assert {:error, %Curl.Error{} = error} = Curl.parse_metadata(stderr_output, uri)
+      assert error.code == 7
+      assert error.message == "Failed to connect to example.com port 443 after 100 ms: Couldn't"
+    end
+
+    test "handles malformed error messages" do
+      uri = URI.parse("https://example.com")
+
+      for stderr_output <- ["curl: () Failed to connect", "curl: (7) ", "curl: (7)"] do
+        assert {:ok, result} = Curl.parse_metadata(stderr_output, uri)
+        assert %Curl.Result{headers: %{}, uris: [], status: nil} = result
+      end
+    end
+
+    test "handles additional information in the error message" do
+      stderr_output = """
+      * SSL certificate problem: unable to get local issuer certificate
+      0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+      * Closing connection 0
+      curl: (60) SSL certificate problem: unable to get local issuer certificate
+      More details here: https://curl.se/docs/sslcerts.html
+
+      curl failed to verify the legitimacy of the server and therefore could not
+      establish a secure connection to it. To learn more about this situation and
+      how to fix it, please visit the web page mentioned above.
+      """
+
+      uri = URI.parse("https://example.com")
+      assert {:error, error} = Curl.parse_metadata(stderr_output, uri)
+      assert error.code == 60
+      assert error.message == "SSL certificate problem: unable to get local issuer certificate"
+    end
+  end
+
   test "processes headers" do
     stderr_output = """
       % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
@@ -35,7 +77,7 @@ defmodule BrowseyHttp.Util.CurlTest do
     """
 
     uri = URI.parse("http://localhost:59752")
-    assert %{headers: headers, status: status} = Curl.parse_metadata(stderr_output, uri)
+    assert {:ok, %{headers: headers, status: status}} = Curl.parse_metadata(stderr_output, uri)
 
     assert headers == %{
              "cache-control" => ["max-age=0, private, must-revalidate"],
@@ -95,7 +137,7 @@ defmodule BrowseyHttp.Util.CurlTest do
     """
 
     uri = URI.parse("http://www.example.com")
-    assert %{status: status} = Curl.parse_metadata(stderr_output, uri)
+    assert {:ok, %{status: status}} = Curl.parse_metadata(stderr_output, uri)
     assert status == 200
   end
 
@@ -115,7 +157,7 @@ defmodule BrowseyHttp.Util.CurlTest do
     """
 
     uri = URI.parse("http://localhost:59752")
-    assert %{headers: headers, status: status} = Curl.parse_metadata(stderr_output, uri)
+    assert {:ok, %{headers: headers, status: status}} = Curl.parse_metadata(stderr_output, uri)
 
     assert headers == %{
              "foo" => ["bar: baz"],
@@ -250,7 +292,7 @@ defmodule BrowseyHttp.Util.CurlTest do
     """
 
     root_uri = URI.parse("http://localhost:59752")
-    assert %{headers: headers, uris: uris} = Curl.parse_metadata(stderr_output, root_uri)
+    assert {:ok, %{headers: headers, uris: uris}} = Curl.parse_metadata(stderr_output, root_uri)
 
     assert headers == %{
              "cache-control" => ["max-age=0, private, must-revalidate"],
@@ -317,7 +359,7 @@ defmodule BrowseyHttp.Util.CurlTest do
     """
 
     uri = URI.parse("http://tylerayoung.com")
-    assert %{uris: uris, status: 200} = Curl.parse_metadata(stderr_output, uri)
+    assert {:ok, %{uris: uris, status: 200}} = Curl.parse_metadata(stderr_output, uri)
 
     assert uris == [%{uri | path: "/"}, URI.parse("https://tylerayoung.com/")]
   end
@@ -438,7 +480,7 @@ defmodule BrowseyHttp.Util.CurlTest do
     """
 
     uri = URI.parse("http://thegiftedguide.com")
-    assert %{uris: uris, status: 200} = Curl.parse_metadata(stderr_output, uri)
+    assert {:ok, %{uris: uris, status: 200}} = Curl.parse_metadata(stderr_output, uri)
 
     assert uris == [%{uri | path: "/"}, URI.parse("https://www.thegiftedguide.com/")]
   end
@@ -536,7 +578,7 @@ defmodule BrowseyHttp.Util.CurlTest do
 
     uri = URI.parse("http://www.trulia.com/home/2858-briarcliff-rd-atlanta-ga-30329-14543068")
 
-    assert %{headers: headers, uris: uris, status: status} =
+    assert {:ok, %{headers: headers, uris: uris, status: status}} =
              Curl.parse_metadata(stderr_output, uri)
 
     assert status == 200

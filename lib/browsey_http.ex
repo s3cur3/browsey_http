@@ -300,34 +300,38 @@ defmodule BrowseyHttp do
         " "
       )
 
-    case Util.Exec.exec(command, timeout + 5_000) do
-      {:ok, result} ->
-        body_parts = result[:stdout] || []
-        body = Enum.join(body_parts)
-
-        meta_parts = result[:stderr] || []
-        metadata = Enum.join(meta_parts)
-
-        {:ok, curl_output_to_response(body, metadata, uri, prev_uris)}
-
-      # TODO: Parse the exit code (see section "EXIT CODES" of the cURL man page)
+    with {:ok, result} <- Util.Exec.exec(command, timeout + 5_000),
+         metadata = Enum.join(result[:stderr] || []),
+         {:ok, %Curl.Result{} = metadata} <- Curl.parse_metadata(metadata, uri) do
+      body = Enum.join(result[:stdout] || [])
+      {:ok, curl_output_to_response(body, metadata, prev_uris)}
+    else
       {:error, error_kwlist} ->
-        status = Access.fetch!(error_kwlist, :exit_status)
+        metadata = Enum.join(error_kwlist[:stderr] || [])
+
+        status =
+          case Curl.parse_metadata(metadata, uri) do
+            {:error, %Curl.Error{code: code}} -> code
+            _ -> Access.fetch!(error_kwlist, :exit_status)
+          end
 
         case status do
-          s when s in [6, 1536] -> {:error, ConnectionException.could_not_resolve_host(uri)}
-          s when s in [7, 1792] -> {:error, ConnectionException.could_not_connect(uri)}
-          s when s in [28, 7168] -> {:error, TimeoutException.timed_out(uri, timeout)}
-          s when s in [35, 15_360] -> {:error, SslException.new(uri)}
-          s when s in [47, 12_032] -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
-          s when s in [63, 16_128] -> {:error, TooLargeException.new(uri, max_bytes)}
+          3 -> {:error, ConnectionException.invalid_url(uri)}
+          6 -> {:error, ConnectionException.could_not_resolve_host(uri)}
+          7 -> {:error, ConnectionException.could_not_connect(uri)}
+          28 -> {:error, TimeoutException.timed_out(uri, timeout)}
+          35 -> {:error, SslException.new(uri)}
+          47 -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
+          56 -> {:error, ConnectionException.failed_to_receive(uri)}
+          60 -> {:error, SslException.new(uri)}
+          63 -> {:error, TooLargeException.new(uri, max_bytes)}
           _ -> {:error, ConnectionException.unknown_error(uri, status)}
         end
     end
   end
 
-  defp curl_output_to_response(curl_output, metadata, %URI{} = uri, prev_uris) do
-    %{headers: headers, uris: uris, status: status} = Curl.parse_metadata(metadata, uri)
+  defp curl_output_to_response(curl_output, %Curl.Result{} = metadata, prev_uris) do
+    %{headers: headers, uris: uris, status: status} = metadata
 
     %BrowseyHttp.Response{
       body: curl_output,

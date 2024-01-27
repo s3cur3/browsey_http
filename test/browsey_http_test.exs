@@ -456,10 +456,13 @@ defmodule BrowseyHttpTest do
           "https://",
           "https:// this isn't a url",
           "this isn't a url",
-          "example.com"
+          "example.com",
+          "https://www.Beatrice Moise.com/",
+          "http://Lobmard,%20IL/"
         ] do
       assert {:error, %ConnectionException{} = error} = BrowseyHttp.get(url)
       assert error.uri == URI.parse(url)
+      assert error.error_code == 3
     end
   end
 

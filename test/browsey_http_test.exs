@@ -449,6 +449,12 @@ defmodule BrowseyHttpTest do
     end
   end
 
+  @tag integration: true
+  test "can skip SSL errors" do
+    assert {:ok, %BrowseyHttp.Response{}} =
+             BrowseyHttp.get("https://self.signed.badssl.com/", ignore_ssl_errors?: true)
+  end
+
   test "identifies malformed urls" do
     for url <- [
           "",

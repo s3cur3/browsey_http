@@ -91,6 +91,7 @@ defmodule BrowseyHttp do
           | {:max_response_size_bytes, non_neg_integer() | :infinity}
           | {:receive_timeout, timeout()}
           | {:browser, browser() | :random}
+          | {:ignore_ssl_errors?, boolean()}
 
   @available_browsers %{
     android: "curl_chrome99_android",
@@ -126,6 +127,10 @@ defmodule BrowseyHttp do
   - `:browser`: One of `:chrome`, `:chrome_android`, `:edge`, `:safari`, or `:random`.
     Defaults to `:chrome`, except for domains known to block our Chrome version, 
     in which case a better default will be chosen.
+  - `:ignore_ssl_errors?`: If true, we won't produce an `SslException` when the SSL handshake
+    fails. This can be useful when the remote server has a root certificate that is unknown
+    to the browser (including self-signed certificates). Use with caution, of course.
+    Defaults to false.
 
   ### Examples
 
@@ -281,6 +286,13 @@ defmodule BrowseyHttp do
         ""
       end
 
+    security_args =
+      if Access.get(opts, :ignore_ssl_errors?, false) do
+        "--insecure"
+      else
+        ""
+      end
+
     # TODO: Should we have a separate cookie file for every request?
     tmp_dir = System.tmp_dir!()
     cookie_file = Path.join(tmp_dir, "cookie-jar")
@@ -292,6 +304,7 @@ defmodule BrowseyHttp do
           "-v",
           "\"#{to_string(uri)}\"",
           redirect_args,
+          security_args,
           "--max-time #{timeout / 1_000}",
           "--max-filesize #{max_bytes}",
           "--cookie #{cookie_file}",

@@ -67,9 +67,39 @@ Because of its reliability, flat monthly price, and low resource consumption,
 Browsey makes a better *first* choice for your scraping needs. Then you can fall back to
 expensive third-party APIs when you encounter a site that really needs a headless browser.
 
+## Installation
+
+1. [Buy a license for BrowseyHttp](https://hex.codecodeship.com/package/browsey_http)
+2. Add CodeCodeShip as a new Hex repo so that you'll be able to download the dependency.
+    I recommend add this as a new Mix task so you can include it in your `mix setup` process.
+    Here's what that looks like in your `mix.exs` file (note that you'll need to replace `YOUR-AUTH-KEY-HERE` with the license key CodeCodeShip provides):
+
+    ```elixir
+    defp aliases do
+    [
+      ...,
+      "setup.deps": [
+          "hex.repo add codecodeship https://hex.codecodeship.com/api/repo --fetch-public-key SHA256:5hyUvvnGT45CntYCrHAOO3tn94l1xz8fUlyQS7qDhxg --auth-key YOUR-AUTH-KEY-HERE"
+        ]
+      # Add setup.deps as the first step in whatever your existing setup process was
+      setup: ["setup.deps", "deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      ...
+    ]
+    ```
+3. Add it to your `mix.exs` file's dependencies:
+
+    ```elixir
+    def deps do
+      [
+        {:browsey_http, "~> 0.0.3", repo: :codecodeship},
+      ]
+    end
+    ```
+4. Run `$ mix setup` to both add the CodeCodeship repo and download the new dependency.
+
 ## Usage
 
-Once installed, you can crawl a single page using [`BrowseyHttp.get/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.3/BrowseyHttp.html#get/2):
+Once installed, you can scrape a single page using [`BrowseyHttp.get/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.3/BrowseyHttp.html#get/2):
 
 ```elixir
 case BrowseyHttp.get("https://www.example.com") do
@@ -78,7 +108,7 @@ case BrowseyHttp.get("https://www.example.com") do
 end
 ```
 
-Or you can crawl a page *plus* all the resources it embeds (images, CSS, JavaScript) 
+Or you can download a page *plus* all the resources it embeds (images, CSS, JavaScript) 
 in parallel using [`BrowseyHttp.get_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.3/BrowseyHttp.html#get_with_resources/2):
 
 ```elixir

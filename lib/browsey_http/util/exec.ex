@@ -13,4 +13,9 @@ defmodule BrowseyHttp.Util.Exec do
       """
     end
   end
+
+  @spec running_as_root?() :: boolean()
+  def running_as_root? do
+    System.cmd("id", ["-u"], env: %{}) == {"0\n", 0}
+  end
 end

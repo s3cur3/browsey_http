@@ -9,8 +9,19 @@ defmodule BrowseyHttp.Application do
       System.put_env("SHELL", "/bin/sh")
     end
 
+    docker_allow_root_args =
+      if BrowseyHttp.Util.Exec.running_as_root?() do
+        [:root, user: "root", limit_users: ["root"]]
+      else
+        []
+      end
+
     children = [
-      %{id: :exec, start: {:exec, :start_link, [[]]}, restart: :permanent}
+      %{
+        id: :exec,
+        start: {:exec, :start_link, [docker_allow_root_args]},
+        restart: :permanent
+      }
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.4
+
+Fix for crash as startup when running in Docker.
+
 ## v0.0.3
 
 Massive improvements to browser spoofing, allowing us to scrape way more

@@ -100,6 +100,7 @@ defmodule BrowseyHttp.MixProject do
 
       # Testing
       {:bypass, "~> 2.1", only: [:test]},
+      {:example_test, "~> 0.0", only: [:test]},
       {:patch, "~> 0.13.0", only: [:test]}
     ]
   end

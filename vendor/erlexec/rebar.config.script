@@ -1,0 +1,6 @@
+%% vim:ts=2:sw=2:et
+
+Vsn = string:strip(os:cmd("git describe --always --tags --abbrev=0 | sed 's/^v//'"), right, $\n),
+
+maps:to_list(maps:merge(maps:from_list(CONFIG), #{edoc_opts => [{def, {vsn, Vsn}}]})).
+

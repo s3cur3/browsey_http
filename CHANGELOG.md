@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.5
+
+Support running in Docker as root and silence irrelevant compile warnings.
+
 ## v0.0.4
 
 Fix for crash as startup when running in Docker.

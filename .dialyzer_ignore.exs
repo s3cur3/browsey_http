@@ -6,5 +6,7 @@
 # More info in the Dialyxir README:
 # https://github.com/jeremyjh/dialyxir#elixir-term-format
 [
-  {"lib/browsey_http/util/exec.ex", :unknown_function}
+  # :dockerexec.run/3 *can* return other success results, but based on the arguments
+  # we've hard-coded, we know the result will always be this structure.
+  {"lib/browsey_http/util/exec.ex", :missing_range}
 ]

@@ -22,7 +22,7 @@ ifeq ($(CXX),)
   SYSROOT := ""
 else
   TARGET  := $(shell $(CXX) -dumpmachine)
-  SYSROOT := $(shell $(CXX) -print-sysroot)
+  SYSROOT := $(shell $(CXX) -print-sysroot 2>/dev/null)
 endif
 
 

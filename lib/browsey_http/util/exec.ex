@@ -4,7 +4,13 @@ defmodule BrowseyHttp.Util.Exec do
   @spec exec(String.t(), non_neg_integer()) ::
           {:ok, [{:stdout | :stderr, [binary()]}]} | {:error, Keyword.t()}
   def exec(command, timeout) do
-    :dockerexec.run(command, [:sync, :stdout, :stderr], timeout)
+    opts = [:sync, :stdout, :stderr]
+
+    if Code.ensure_loaded?(:dockerexec) do
+      :dockerexec.run(command, opts, timeout)
+    else
+      apply(:exec, :run, [command, opts, timeout])
+    end
   end
 
   @spec running_as_root?() :: boolean()

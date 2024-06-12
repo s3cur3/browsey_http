@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.0.6
+
+Support using erlexec rather than dockerexec (useful if you're using erlexec 
+for other reasons already).
+
 ## v0.0.5
 
 Support running in Docker as root and silence irrelevant compile warnings.

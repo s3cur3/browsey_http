@@ -92,6 +92,10 @@ expensive third-party APIs when you encounter a site that really needs a headles
     def deps do
       [
         {:browsey_http, "~> 0.0.5", repo: :codecodeship},
+        # Optional: you may already be using erlexec in your app. If you're not,
+        # you'll need to either install it, or dockerexec (which is less fussy when
+        # deployed in Docker environments).
+        {:dockerexec, "~> 2.0"},
       ]
     end
     ```

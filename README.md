@@ -71,7 +71,7 @@ expensive third-party APIs when you encounter a site that really needs a headles
 
 1. [Buy a license for BrowseyHttp](https://hex.codecodeship.com/package/browsey_http)
 2. Add CodeCodeShip as a new Hex repo so that you'll be able to download the dependency.
-    I recommend add this as a new Mix task so you can include it in your `mix setup` process.
+    I recommend adding this as a new Mix task so you can include it in your `mix setup` process.
     Here's what that looks like in your `mix.exs` file (note that you'll need to replace `YOUR-AUTH-KEY-HERE` with the license key CodeCodeShip provides):
 
     ```elixir
@@ -96,6 +96,29 @@ expensive third-party APIs when you encounter a site that really needs a headles
     end
     ```
 4. Run `$ mix setup` to both add the CodeCodeship repo and download the new dependency.
+
+If you use GitHub Dependabot, you'll need to update your Dependabot configuration 
+with the CodeCodeShip repo as in the sample below. Don't forget to also add the
+public and private keys to your Dependabot secrets in the repo settings.
+
+```yaml
+version: 2
+updates:
+- package-ecosystem: mix
+  schedule:
+    interval: weekly
+  registries:
+  - 'codecodeship'
+  # Required for Dependabot to run external repository code
+  insecure-external-code-execution: allow
+registries:
+   codecodeship:
+     type: hex-repository
+     repo: codecodeship
+     url: https://hex.codecodeship.com/api/repo
+     auth-key: ${{ secrets.BROWSEY_AUTH_KEY }}
+     public-key-fingerprint: ${{ secrets.BROWSEY_PUBLIC_KEY }}
+```
 
 ## Usage
 

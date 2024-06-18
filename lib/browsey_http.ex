@@ -125,7 +125,7 @@ defmodule BrowseyHttp do
   - `:receive_timeout`: The maximum time (in milliseconds) to wait to receive a response after
     connecting to the server. Defaults to 30,000 (30 seconds).
   - `:browser`: One of `:chrome`, `:chrome_android`, `:edge`, `:safari`, or `:random`.
-    Defaults to `:chrome`, except for domains known to block our Chrome version, 
+    Defaults to `:chrome`, except for domains known to block our Chrome version,
     in which case a better default will be chosen.
   - `:ignore_ssl_errors?`: If true, we won't produce an `SslException` when the SSL handshake
     fails. This can be useful when the remote server has a root certificate that is unknown
@@ -297,35 +297,27 @@ defmodule BrowseyHttp do
     tmp_dir = System.tmp_dir!()
     cookie_file = Path.join(tmp_dir, "cookie-jar")
 
-    command =
-      Enum.join(
-        [
-          script,
-          "-v",
-          "\"#{to_string(uri)}\"",
-          redirect_args,
-          security_args,
-          "--max-time #{timeout / 1_000}",
-          "--max-filesize #{max_bytes}",
-          "--cookie #{cookie_file}",
-          "--cookie-jar #{cookie_file}"
-        ],
-        " "
-      )
+    args =
+      [
+        "-v",
+        "\"#{to_string(uri)}\"",
+        redirect_args,
+        security_args,
+        "--max-time #{timeout / 1_000}",
+        "--max-filesize #{max_bytes}",
+        "--cookie #{cookie_file}",
+        "--cookie-jar #{cookie_file}"
+      ]
 
-    with {:ok, result} <- Util.Exec.exec(command, timeout + 5_000),
-         metadata = Enum.join(result[:stderr] || []),
-         {:ok, %Curl.Result{} = metadata} <- Curl.parse_metadata(metadata, uri) do
-      body = Enum.join(result[:stdout] || [])
+    with {:ok, %{stdout: body, stderr: stderr}} <- Util.Exec.exec(script, args, timeout + 5_000),
+         {:ok, %Curl.Result{} = metadata} <- Curl.parse_metadata(stderr, uri) do
       {:ok, curl_output_to_response(body, metadata, prev_uris)}
     else
-      {:error, error_kwlist} ->
-        metadata = Enum.join(error_kwlist[:stderr] || [])
-
+      {:error, %{stderr: error_output, exit_status: exit_status}} ->
         status =
-          case Curl.parse_metadata(metadata, uri) do
+          case Curl.parse_metadata(error_output, uri) do
             {:error, %Curl.Error{code: code}} -> code
-            _ -> Access.fetch!(error_kwlist, :exit_status)
+            _ -> exit_status
           end
 
         case status do

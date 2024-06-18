@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.7
+
+Replace erlexec/dockerexec with rambo.
+
 ## v0.0.6
 
 Support using erlexec rather than dockerexec (useful if you're using erlexec 

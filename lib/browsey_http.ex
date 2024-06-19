@@ -125,7 +125,7 @@ defmodule BrowseyHttp do
   - `:receive_timeout`: The maximum time (in milliseconds) to wait to receive a response after
     connecting to the server. Defaults to 30,000 (30 seconds).
   - `:browser`: One of `:chrome`, `:chrome_android`, `:edge`, `:safari`, or `:random`.
-    Defaults to `:chrome`, except for domains known to block our Chrome version, 
+    Defaults to `:chrome`, except for domains known to block our Chrome version,
     in which case a better default will be chosen.
   - `:ignore_ssl_errors?`: If true, we won't produce an `SslException` when the SSL handshake
     fails. This can be useful when the remote server has a root certificate that is unknown
@@ -308,7 +308,12 @@ defmodule BrowseyHttp do
           "--max-time #{timeout / 1_000}",
           "--max-filesize #{max_bytes}",
           "--cookie #{cookie_file}",
-          "--cookie-jar #{cookie_file}"
+          "--cookie-jar #{cookie_file}",
+          if uri.host in ["twitter.com", "x.com"] do
+            "--header \"#{request_server_side_rendering_user_agent()}\""
+          else
+            ""
+          end
         ],
         " "
       )
@@ -341,6 +346,15 @@ defmodule BrowseyHttp do
           _ -> {:error, ConnectionException.unknown_error(uri, status)}
         end
     end
+  end
+
+  defp request_server_side_rendering_user_agent do
+    # Using GoogleBot on Twitter returns a 403; some other well-known bots apparently are expected
+    # to execute the Javascript. Baidu apparently neither sends auth nor executes the page.
+    baidu_bot =
+      "Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)"
+
+    "User-Agent: #{baidu_bot}"
   end
 
   defp curl_output_to_response(curl_output, %Curl.Result{} = metadata, prev_uris) do

@@ -2,8 +2,12 @@
 
 ## v0.0.6
 
-Support using erlexec rather than dockerexec (useful if you're using erlexec 
-for other reasons already).
+- Support scraping individual tweet URLs (e.g., https://x.com/TylerAYoung/status/1803047558853415154)
+  and at least getting back the metadata. (You won't get the full page, because 
+  Twitter is fully client side rendered, but you can at least get the OpenGraph tags, which
+  generally contain the content you want.)
+- Support using erlexec rather than dockerexec (useful if you're using erlexec 
+  for other reasons already).
 
 ## v0.0.5
 

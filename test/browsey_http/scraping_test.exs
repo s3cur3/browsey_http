@@ -36,15 +36,14 @@ defmodule BrowseyHttp.ScrapingTest do
     assert scrape_text(url) =~ expected_text
   end
 
-  @tag scraping_todo: true
   test "scrapes Twitter" do
-    url = "https://twitter.com/FaizaanShamsi/status/1747641905981100212"
+    url = "https://x.com/FaizaanShamsi/status/1747641905981100212"
 
     page_text =
       url
       |> get_body!()
       |> Floki.parse_document!()
-      |> Floki.text()
+      |> Floki.raw_html()
 
     assert page_text =~ "could you please send a resume"
   end

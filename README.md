@@ -12,6 +12,9 @@ It's able to scrape sites that are notoriously difficult, including:
 - LinkedIn (at least for the first few requests per day per IP, after which even real browsers will be shown the "auth wall")
 - Real estate sites including Zillow, Realtor.com, and Trulia
 - OpenSea
+- Twitter/X.com (in a limited form—though Twitter is fully client-side rendered, Browsey will
+  at least let you get the page metadata, where the OpenGraph tags often contain the info
+  you're interested in)
 - Sites protected by Cloudflare
 - Sites protected by PerimeterX/HUMAN Security
 - Sites protected by DataDome, including Reddit, AllTrails, and RealClearPolitics

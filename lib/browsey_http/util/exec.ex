@@ -1,12 +1,16 @@
 defmodule BrowseyHttp.Util.Exec do
   @moduledoc false
 
+  defmacrop dockerexec_loaded? do
+    Code.ensure_loaded?(:dockerexec)
+  end
+
   @spec exec(String.t(), non_neg_integer()) ::
           {:ok, [{:stdout | :stderr, [binary()]}]} | {:error, Keyword.t()}
   def exec(command, timeout) do
     opts = [:sync, :stdout, :stderr]
 
-    if Code.ensure_loaded?(:dockerexec) do
+    if dockerexec_loaded?() do
       :dockerexec.run(command, opts, timeout)
     else
       apply(:exec, :run, [command, opts, timeout])

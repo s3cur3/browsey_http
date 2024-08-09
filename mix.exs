@@ -95,7 +95,7 @@ defmodule BrowseyHttp.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.2", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18.0", only: [:dev, :test], runtime: false},
-      {:styler, "~> 0.11", only: [:dev, :test], runtime: false},
+      {:styler, "~> 1.0", only: [:dev, :test], runtime: false},
 
       # Testing
       {:bypass, "~> 2.1", only: [:test]},

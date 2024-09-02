@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.7
+
+Fix for unhandled case crash when fetching a URL.
+
 ## v0.0.6
 
 - Support scraping individual tweet URLs (e.g., https://x.com/TylerAYoung/status/1803047558853415154)

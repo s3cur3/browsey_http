@@ -42,6 +42,9 @@ defmodule BrowseyHttp.Util.Curl do
 
         [response_lines] ->
           drop_switching_protocols(response_lines)
+
+        _ ->
+          []
       end)
 
     paths_naive =

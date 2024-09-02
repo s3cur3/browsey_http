@@ -94,7 +94,7 @@ expensive third-party APIs when you encounter a site that really needs a headles
     ```elixir
     def deps do
       [
-        {:browsey_http, "~> 0.0.6", repo: :codecodeship},
+        {:browsey_http, "~> 0.0.7", repo: :codecodeship},
         # Optional: you may already be using erlexec in your app. If you're not,
         # you'll need to either install it, or dockerexec (which is less fussy when
         # deployed in Docker environments).
@@ -129,7 +129,7 @@ registries:
 
 ## Usage
 
-Once installed, you can scrape a single page using [`BrowseyHttp.get/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.6/BrowseyHttp.html#get/2):
+Once installed, you can scrape a single page using [`BrowseyHttp.get/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.7/BrowseyHttp.html#get/2):
 
 ```elixir
 case BrowseyHttp.get("https://www.example.com") do
@@ -139,7 +139,7 @@ end
 ```
 
 Or you can download a page *plus* all the resources it embeds (images, CSS, JavaScript) 
-in parallel using [`BrowseyHttp.get_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.6/BrowseyHttp.html#get_with_resources/2):
+in parallel using [`BrowseyHttp.get_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.7/BrowseyHttp.html#get_with_resources/2):
 
 ```elixir
 case BrowseyHttp.get_with_resources("https://www.example.com") do
@@ -153,6 +153,6 @@ end
 ```
 
 You can also get the additional resources as a [Stream](https://hexdocs.pm/elixir/Stream.html)
-via [`BrowseyHttp.stream_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.6/BrowseyHttp.html#stream_with_resources/2).
+via [`BrowseyHttp.stream_with_resources/2`](http://hexdocs.codecodeship.com/browsey_http/0.0.7/BrowseyHttp.html#stream_with_resources/2).
 
 See the docs linked above for a breakdown of the available options to these functions.

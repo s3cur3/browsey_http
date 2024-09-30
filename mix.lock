@@ -26,7 +26,7 @@
   "plug_cowboy": {:hex, :plug_cowboy, "2.6.2", "753611b23b29231fb916b0cdd96028084b12aff57bfd7b71781bd04b1dbeb5c9", [:mix], [{:cowboy, "~> 2.7", [hex: :cowboy, repo: "hexpm", optional: false]}, {:cowboy_telemetry, "~> 0.3", [hex: :cowboy_telemetry, repo: "hexpm", optional: false]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}], "hexpm", "951ed2433df22f4c97b85fdb145d4cee561f36b74854d64c06d896d7cd2921a7"},
   "plug_crypto": {:hex, :plug_crypto, "2.0.0", "77515cc10af06645abbfb5e6ad7a3e9714f805ae118fa1a70205f80d2d70fe73", [:mix], [], "hexpm", "53695bae57cc4e54566d993eb01074e4d894b65a3766f1c43e2c61a1b0f45ea9"},
   "ranch": {:hex, :ranch, "1.8.0", "8c7a100a139fd57f17327b6413e4167ac559fbc04ca7448e9be9057311597a1d", [:make, :rebar3], [], "hexpm", "49fbcfd3682fab1f5d109351b61257676da1a2fdbe295904176d5e521a2ddfe5"},
-  "styler": {:hex, :styler, "1.0.0", "87daf4a8e421d7678da78f9532a632974de6b8060b80d7827abec3bca5140173", [:mix], [], "hexpm", "4ba5bc40c5eaebe2bb05ec0bb7b5a889d38c6ea6865c584dffd360b3a94ec625"},
+  "styler": {:hex, :styler, "1.1.1", "ccb55763316915b5de532bf14c587c211ddc86bc749ac676e74dfacd3894cc0d", [:mix], [], "hexpm", "80ce12fb862e13d998589eea7c1932f4e6ce9d6ded2182cb322f8f9b2b8d3632"},
   "telemetry": {:hex, :telemetry, "1.2.1", "68fdfe8d8f05a8428483a97d7aab2f268aaff24b49e0f599faa091f1d4e7f61c", [:rebar3], [], "hexpm", "dad9ce9d8effc621708f99eac538ef1cbe05d6a874dd741de2e689c47feafed5"},
   "typed_struct": {:hex, :typed_struct, "0.3.0", "939789e3c1dca39d7170c87f729127469d1315dcf99fee8e152bb774b17e7ff7", [:mix], [], "hexpm", "c50bd5c3a61fe4e198a8504f939be3d3c85903b382bde4865579bc23111d1b6d"},
 }

@@ -12,29 +12,26 @@ It's able to scrape sites that are notoriously difficult, including:
 - LinkedIn (at least for the first few requests per day per IP, after which even real browsers will be shown the "auth wall")
 - Real estate sites including Zillow, Realtor.com, and Trulia
 - OpenSea
-- Twitter/X.com (in a limited form—though Twitter is fully client-side rendered, Browsey will
-  at least let you get the page metadata, where the OpenGraph tags often contain the info
-  you're interested in)
 - Sites protected by Cloudflare
 - Sites protected by PerimeterX/HUMAN Security
 - Sites protected by DataDome, including Reddit, AllTrails, and RealClearPolitics
 
-Plus, as a customer of Browsey, if you encounter a site Browsey can't scrape, we'll make
-a best effort attempt to get a fix for you. (Fully client-side rendered sites, though, will
-still not be supported.)
+Fully client-side rendered sites like Twitter, though, won't be supported; for those cases, 
+you'll need to fall back to a headless browser.
 
-Note that when scraping, you'll need to be mindful of both the IPs you're scraping from and
-how many requests you're sending to a given site. Too much traffic from a given IP will trip
-rate limits even if you *were* using a real browser. (For instance, if you try to scrape any
-major site within your CI system, it's almost guaranteed to fail. A shared IP on a cloud
-server is iffy as well.)
+Note that when scraping, you'll also need to be mindful of both the IPs you're scraping from and
+how many requests you're sending to a given site. Too much traffic from a given IP, or IPs
+within a major cloud provider's data center, will trip rate limits and bot detect even if
+you *were* using a real browser. (For instance, if you try to scrape any
+major site within your CI system, it's almost guaranteed to fail.)
 
 ## Why BrowseyHttp?
 
 ### Browsey versus other HTTP clients
 
-Because Browsey imitates a real browser beyond just faking a user agents, it is able to
-scrape *vastly* more sites than a default-configured HTTP client like HTTPoison, Finch,
+Because Browsey imitates a real browser's "[fingerprint](https://github.com/FoxIO-LLC/ja4?tab=readme-ov-file)"
+beyond just faking a user agents, it is able to scrape *vastly* more sites than a
+default-configured HTTP client like HTTPoison, Finch,
 or Req, which get blocked by Cloudflare and other anti-bot measures.
 
 ### Browsey versus Selenium, Chromedriver, Playwright, etc.
@@ -66,66 +63,26 @@ a headless browser for you, but they're subject to the same issues as the headle
 themselves in terms of reliability. It doesn't feel great to pay the high prices of a
 scraping service only to get back a failure unrelated to the site you're scraping being down.
 
-Because of its reliability, flat monthly price, and low resource consumption,
+Because of its reliability, price (free!), and low resource consumption,
 Browsey makes a better *first* choice for your scraping needs. Then you can fall back to
 expensive third-party APIs when you encounter a site that really needs a headless browser.
 
 ## Installation
 
-1. [Buy a license for BrowseyHttp](https://hex.codecodeship.com/package/browsey_http)
-2. Add CodeCodeShip as a new Hex repo so that you'll be able to download the dependency.
-    I recommend adding this as a new Mix task so you can include it in your `mix setup` process.
-    Here's what that looks like in your `mix.exs` file (note that you'll need to replace `YOUR-AUTH-KEY-HERE` with the license key CodeCodeShip provides):
+1. Add BrowseyHttp to your deps, and ensure either `:exec` or `:dockerexec` is installed as well:
 
     ```elixir
-    defp aliases do
+    defp deps do
     [
-      ...,
-      "setup.deps": [
-          "hex.repo add codecodeship https://hex.codecodeship.com/api/repo --fetch-public-key SHA256:5hyUvvnGT45CntYCrHAOO3tn94l1xz8fUlyQS7qDhxg --auth-key YOUR-AUTH-KEY-HERE"
-        ]
-      # Add setup.deps as the first step in whatever your existing setup process was
-      setup: ["setup.deps", "deps.get", "ecto.setup", "assets.setup", "assets.build"],
-      ...
+      {:browsey_http, github: "s3cur3/browsey_http", branch: "main"},
+      # Optional: you may already be using erlexec in your app. If you're not,
+      # you'll need to either install it, or dockerexec (which is less fussy when
+      # deployed in Docker environments).
+      {:dockerexec, "~> 2.0"},
     ]
     ```
-3. Add it to your `mix.exs` file's dependencies:
 
-    ```elixir
-    def deps do
-      [
-        {:browsey_http, "~> 0.0.7", repo: :codecodeship},
-        # Optional: you may already be using erlexec in your app. If you're not,
-        # you'll need to either install it, or dockerexec (which is less fussy when
-        # deployed in Docker environments).
-        {:dockerexec, "~> 2.0"},
-      ]
-    end
-    ```
-4. Run `$ mix setup` to both add the CodeCodeship repo and download the new dependency.
-
-If you use GitHub Dependabot, you'll need to update your Dependabot configuration 
-with the CodeCodeShip repo as in the sample below. Don't forget to also add the
-public and private keys to your Dependabot secrets in the repo settings.
-
-```yaml
-version: 2
-updates:
-- package-ecosystem: mix
-  schedule:
-    interval: weekly
-  registries:
-  - 'codecodeship'
-  # Required for Dependabot to run external repository code
-  insecure-external-code-execution: allow
-registries:
-   codecodeship:
-     type: hex-repository
-     repo: codecodeship
-     url: https://hex.codecodeship.com/api/repo
-     auth-key: ${{ secrets.BROWSEY_AUTH_KEY }}
-     public-key-fingerprint: ${{ secrets.BROWSEY_PUBLIC_KEY }}
-```
+2. Run `$ mix setup` or `$ mix deps.get` to download the new dependency
 
 ## Usage
 

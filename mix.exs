@@ -6,15 +6,12 @@ defmodule BrowseyHttp.MixProject do
   def project do
     [
       app: :browsey_http,
-      version: "0.0.7",
+      version: "0.0.8",
       elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      hex: [
-        api_url: "https://hex.codecodeship.com/api"
-      ],
       docs: docs(),
       description:
         "A browser-imitating HTTP client for scraping websites that resist bot traffic",
@@ -68,7 +65,7 @@ defmodule BrowseyHttp.MixProject do
     [
       files: ["lib", "mix.exs", "README.md", "CHANGELOG.md", "priv/curl"],
       maintainers: ["Tyler Young"],
-      licenses: ["Commercial"],
+      licenses: ["MIT"],
       links: %{"GitHub" => @source_url}
     ]
   end

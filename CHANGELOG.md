@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.0.8
+
+- Changed license to MIT
+- Removed stated support for scraping tweets (since the trick we previously used seems to no longer work)
+
 ## v0.0.7
 
 Fix for unhandled case crash when fetching a URL.

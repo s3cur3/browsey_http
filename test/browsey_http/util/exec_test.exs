@@ -1,5 +1,5 @@
 defmodule BrowseyHttp.Util.ExecTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   @tag timeout: 5_000
   test "supports timeout" do

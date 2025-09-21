@@ -92,6 +92,7 @@ defmodule BrowseyHttp do
           | {:receive_timeout, timeout()}
           | {:browser, browser() | :random}
           | {:ignore_ssl_errors?, boolean()}
+          | {:timeout, timeout()}
 
   @available_browsers %{
     android: "curl_chrome99_android",

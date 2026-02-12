@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Find the directory of this script
+dir=${0%/*}
+
+"$dir/curl-impersonate-chrome" "$@"

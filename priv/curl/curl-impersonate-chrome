@@ -1,43 +1,47 @@
 #!/usr/bin/env bash
 
-check_homebrew () {
-  if ! command -v brew &> /dev/null; then
-    echo "Homebrew could not be found; please install it,"
-    echo "or install the following dependencies:"
-    echo "  - libidn2"
-    exit 1
-  fi
-}
-
-check_mac_deps () {
-  set -e
-
-  if command -v idn2 &> /dev/null; then
-    version_dir=basename -a /opt/homebrew/Cellar/libidn2/2.*
-
-# TODO: Also /usr/local/
-
-    for dir in /opt/homebrew/Cellar/libidn2/2.* ; do
-      if [ -d "$dir" ]; then
-        path="/opt/homebrew/Cellar/libidn2/$dir/lib/libidn2.0.dylib"
-        cd "$dir"
-      fi
-    done
-  else
-    echo "---- Installing dependency libidn2 ----"
-    check_homebrew
-    brew install libidn2
-    echo "---- Finished installing dependency libidn2 ----"
-  fi
-}
+set -euo pipefail
 
 # Find the directory of this script
 dir=${0%/*}
 
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-  "$dir/linux/curl-impersonate-chrome" "$@"
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-  # check_mac_deps
-  #PATH="/usr/local/opt/libidn2/bin:$PATH"
-  "$dir/macos-$(uname -m)/curl-impersonate-chrome" "$@"
+os="$(uname -s)"
+binary=""
+raw_arch="$(uname -m)"
+
+if [[ "$os" == "Linux" ]]; then
+  case "$raw_arch" in
+    x86_64 | amd64) arch="x86_64" ;;
+    aarch64 | arm64) arch="aarch64" ;;
+    armv7l | armv7 | armhf) arch="armv7l" ;;
+    i386 | i686) arch="i386" ;;
+    loongarch64) arch="loongarch64" ;;
+    riscv64) arch="riscv64" ;;
+    *) arch="$raw_arch" ;;
+  esac
+
+  binary="$dir/linux-$arch/curl-impersonate-chrome"
+
+  # Backward compatibility for the old linux-x86_64 path.
+  if [[ ! -x "$binary" && "$arch" == "x86_64" ]]; then
+    binary="$dir/linux/curl-impersonate-chrome"
+  fi
+elif [[ "$os" == "Darwin" ]]; then
+  case "$raw_arch" in
+    x86_64 | amd64) arch="x86_64" ;;
+    arm64 | aarch64) arch="arm64" ;;
+    *) arch="$raw_arch" ;;
+  esac
+
+  binary="$dir/macos-$arch/curl-impersonate-chrome"
+else
+  echo "Unsupported OS for curl-impersonate: $os" >&2
+  exit 1
 fi
+
+if [[ ! -x "$binary" ]]; then
+  echo "No curl-impersonate binary available for $os/$arch" >&2
+  exit 1
+fi
+
+"$binary" "$@"

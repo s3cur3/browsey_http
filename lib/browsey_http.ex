@@ -95,10 +95,10 @@ defmodule BrowseyHttp do
           | {:timeout, timeout()}
 
   @available_browsers %{
-    android: "curl_chrome99_android",
-    chrome: "curl_chrome116",
+    android: "curl_chrome131_android",
+    chrome: "curl_chrome142",
     edge: "curl_edge101",
-    safari: "curl_safari15_5"
+    safari: "curl_safari260"
   }
 
   # Matches Chrome's behavior:
@@ -325,6 +325,9 @@ defmodule BrowseyHttp do
       body = Enum.join(result[:stdout] || [])
       {:ok, curl_output_to_response(body, metadata, prev_uris)}
     else
+      {:error, %Curl.Error{code: code}} ->
+        status_to_result(code, uri, timeout, max_bytes)
+
       {:error, error_kwlist} ->
         metadata = Enum.join(error_kwlist[:stderr] || [])
 
@@ -334,18 +337,24 @@ defmodule BrowseyHttp do
             _ -> Access.fetch!(error_kwlist, :exit_status)
           end
 
-        case status do
-          3 -> {:error, ConnectionException.invalid_url(uri)}
-          6 -> {:error, ConnectionException.could_not_resolve_host(uri)}
-          7 -> {:error, ConnectionException.could_not_connect(uri)}
-          28 -> {:error, TimeoutException.timed_out(uri, timeout)}
-          35 -> {:error, SslException.new(uri)}
-          47 -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
-          56 -> {:error, ConnectionException.failed_to_receive(uri)}
-          60 -> {:error, SslException.new(uri)}
-          63 -> {:error, TooLargeException.new(uri, max_bytes)}
-          _ -> {:error, ConnectionException.unknown_error(uri, status)}
-        end
+        status_to_result(status, uri, timeout, max_bytes)
+    end
+  end
+
+  @spec status_to_result(integer(), URI.t(), timeout(), non_neg_integer() | :infinity) ::
+          {:error, Exception.t()}
+  defp status_to_result(status, uri, timeout, max_bytes) do
+    case status do
+      3 -> {:error, ConnectionException.invalid_url(uri)}
+      6 -> {:error, ConnectionException.could_not_resolve_host(uri)}
+      7 -> {:error, ConnectionException.could_not_connect(uri)}
+      28 -> {:error, TimeoutException.timed_out(uri, timeout)}
+      35 -> {:error, SslException.new(uri)}
+      47 -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
+      56 -> {:error, ConnectionException.failed_to_receive(uri)}
+      60 -> {:error, SslException.new(uri)}
+      63 -> {:error, TooLargeException.new(uri, max_bytes)}
+      _ -> {:error, ConnectionException.unknown_error(uri, status)}
     end
   end
 

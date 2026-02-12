@@ -376,10 +376,10 @@ defmodule BrowseyHttpTest do
 
   describe "choosing a browser" do
     @user_agents %{
-      chrome: "Chrome/116.0.0.0",
+      chrome: "Chrome/142.0.0.0",
       edge: "Edg/101.0.1210.47",
-      android: "Chrome/99.0.4844.58",
-      safari: "Safari/605.1.15"
+      android: "Chrome/131.0.0.0",
+      safari: "Version/26.0 Safari/605.1.15"
     }
     test "can choose a specific browser", %{bypass: bypass, url: url} do
       test_pid = self()

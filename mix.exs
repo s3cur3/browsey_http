@@ -2,6 +2,7 @@ defmodule BrowseyHttp.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/s3cur3/browsey_http"
+  @dockerexec_ref "25b78e2096e3a360f59be19c60a06281675d3ade"
 
   def project do
     [
@@ -81,7 +82,8 @@ defmodule BrowseyHttp.MixProject do
     [
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:domainatrex, "~> 3.0"},
-      {:dockerexec, "~> 2.0", optional: true},
+      {:dockerexec,
+       git: "https://github.com/Valian/dockerexec.git", ref: @dockerexec_ref, optional: true},
       {:floki, ">= 0.30.0"},
       # Faster HTML parser for Floki written in Rust
       # I'm getting a NIF panic using it... see Html5ever in config.exs.

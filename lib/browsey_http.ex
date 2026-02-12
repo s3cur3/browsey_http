@@ -93,6 +93,7 @@ defmodule BrowseyHttp do
           | {:browser, browser() | :random}
           | {:ignore_ssl_errors?, boolean()}
           | {:timeout, timeout()}
+          | {:output, Path.t()}
 
   @available_browsers %{
     android: "curl_chrome131_android",
@@ -132,6 +133,10 @@ defmodule BrowseyHttp do
     fails. This can be useful when the remote server has a root certificate that is unknown
     to the browser (including self-signed certificates). Use with caution, of course.
     Defaults to false.
+  - `:output`: A file path to write the response body to directly via curl's `-o` flag.
+    When set, the response body will be an empty string `""` but headers, status, and
+    redirect tracking work normally. Useful for downloading large files without buffering
+    the entire body in memory.
 
   ### Examples
 
@@ -279,6 +284,7 @@ defmodule BrowseyHttp do
 
     timeout = Access.get(opts, :timeout, :timer.seconds(30))
     max_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
+    output_path = Access.get(opts, :output)
 
     redirect_args =
       if Access.get(opts, :follow_redirects?, true) do
@@ -310,6 +316,7 @@ defmodule BrowseyHttp do
           "--max-filesize #{max_bytes}",
           "--cookie #{cookie_file}",
           "--cookie-jar #{cookie_file}",
+          if(output_path, do: ~s(-o "#{output_path}"), else: ""),
           if uri.host in ["twitter.com", "x.com"] do
             "--header \"#{request_server_side_rendering_user_agent()}\""
           else
@@ -322,7 +329,7 @@ defmodule BrowseyHttp do
     with {:ok, result} <- Util.Exec.exec(command, timeout + 5_000),
          metadata = Enum.join(result[:stderr] || []),
          {:ok, %Curl.Result{} = metadata} <- Curl.parse_metadata(metadata, uri) do
-      body = Enum.join(result[:stdout] || [])
+      body = if(output_path, do: "", else: Enum.join(result[:stdout] || []))
       {:ok, curl_output_to_response(body, metadata, prev_uris)}
     else
       {:error, %Curl.Error{code: code}} ->

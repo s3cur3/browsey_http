@@ -93,12 +93,13 @@ defmodule BrowseyHttp do
           | {:browser, browser() | :random}
           | {:ignore_ssl_errors?, boolean()}
           | {:timeout, timeout()}
+          | {:output, Path.t()}
 
   @available_browsers %{
-    android: "curl_chrome99_android",
-    chrome: "curl_chrome116",
+    android: "curl_chrome131_android",
+    chrome: "curl_chrome142",
     edge: "curl_edge101",
-    safari: "curl_safari15_5"
+    safari: "curl_safari260"
   }
 
   # Matches Chrome's behavior:
@@ -132,6 +133,10 @@ defmodule BrowseyHttp do
     fails. This can be useful when the remote server has a root certificate that is unknown
     to the browser (including self-signed certificates). Use with caution, of course.
     Defaults to false.
+  - `:output`: A file path to write the response body to directly via curl's `-o` flag.
+    When set, the response body will be an empty string `""` but headers, status, and
+    redirect tracking work normally. Useful for downloading large files without buffering
+    the entire body in memory.
 
   ### Examples
 
@@ -279,6 +284,7 @@ defmodule BrowseyHttp do
 
     timeout = Access.get(opts, :timeout, :timer.seconds(30))
     max_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
+    output_path = Access.get(opts, :output)
 
     redirect_args =
       if Access.get(opts, :follow_redirects?, true) do
@@ -310,6 +316,7 @@ defmodule BrowseyHttp do
           "--max-filesize #{max_bytes}",
           "--cookie #{cookie_file}",
           "--cookie-jar #{cookie_file}",
+          if(output_path, do: ~s(-o "#{output_path}"), else: ""),
           if uri.host in ["twitter.com", "x.com"] do
             "--header \"#{request_server_side_rendering_user_agent()}\""
           else
@@ -322,9 +329,12 @@ defmodule BrowseyHttp do
     with {:ok, result} <- Util.Exec.exec(command, timeout + 5_000),
          metadata = Enum.join(result[:stderr] || []),
          {:ok, %Curl.Result{} = metadata} <- Curl.parse_metadata(metadata, uri) do
-      body = Enum.join(result[:stdout] || [])
+      body = if(output_path, do: "", else: Enum.join(result[:stdout] || []))
       {:ok, curl_output_to_response(body, metadata, prev_uris)}
     else
+      {:error, %Curl.Error{code: code}} ->
+        status_to_result(code, uri, timeout, max_bytes)
+
       {:error, error_kwlist} ->
         metadata = Enum.join(error_kwlist[:stderr] || [])
 
@@ -334,18 +344,24 @@ defmodule BrowseyHttp do
             _ -> Access.fetch!(error_kwlist, :exit_status)
           end
 
-        case status do
-          3 -> {:error, ConnectionException.invalid_url(uri)}
-          6 -> {:error, ConnectionException.could_not_resolve_host(uri)}
-          7 -> {:error, ConnectionException.could_not_connect(uri)}
-          28 -> {:error, TimeoutException.timed_out(uri, timeout)}
-          35 -> {:error, SslException.new(uri)}
-          47 -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
-          56 -> {:error, ConnectionException.failed_to_receive(uri)}
-          60 -> {:error, SslException.new(uri)}
-          63 -> {:error, TooLargeException.new(uri, max_bytes)}
-          _ -> {:error, ConnectionException.unknown_error(uri, status)}
-        end
+        status_to_result(status, uri, timeout, max_bytes)
+    end
+  end
+
+  @spec status_to_result(integer(), URI.t(), timeout(), non_neg_integer() | :infinity) ::
+          {:error, Exception.t()}
+  defp status_to_result(status, uri, timeout, max_bytes) do
+    case status do
+      3 -> {:error, ConnectionException.invalid_url(uri)}
+      6 -> {:error, ConnectionException.could_not_resolve_host(uri)}
+      7 -> {:error, ConnectionException.could_not_connect(uri)}
+      28 -> {:error, TimeoutException.timed_out(uri, timeout)}
+      35 -> {:error, SslException.new(uri)}
+      47 -> {:error, TooManyRedirectsException.new(uri, @max_redirects)}
+      56 -> {:error, ConnectionException.failed_to_receive(uri)}
+      60 -> {:error, SslException.new(uri)}
+      63 -> {:error, TooLargeException.new(uri, max_bytes)}
+      _ -> {:error, ConnectionException.unknown_error(uri, status)}
     end
   end
 

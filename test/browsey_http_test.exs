@@ -723,6 +723,83 @@ defmodule BrowseyHttpTest do
     end
   end
 
+  describe "output option" do
+    test "writes body to file, returns empty body", %{bypass: bypass, url: url} do
+      content = "file content for output test"
+
+      Bypass.expect_once(bypass, "GET", "/download", fn conn ->
+        Plug.Conn.resp(conn, 200, content)
+      end)
+
+      output_path = Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
+
+      on_exit(fn -> File.rm(output_path) end)
+
+      assert {:ok, %BrowseyHttp.Response{} = resp} =
+               BrowseyHttp.get("#{url}/download", output: output_path)
+
+      assert resp.body == ""
+      assert resp.status == 200
+      assert File.read!(output_path) == content
+    end
+
+    test "headers and status captured normally", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/download", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("x-custom", "hello")
+        |> Plug.Conn.resp(201, "created content")
+      end)
+
+      output_path = Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
+
+      on_exit(fn -> File.rm(output_path) end)
+
+      assert {:ok, %BrowseyHttp.Response{} = resp} =
+               BrowseyHttp.get("#{url}/download", output: output_path)
+
+      assert resp.status == 201
+      assert resp.headers["x-custom"] == ["hello"]
+      assert resp.body == ""
+    end
+
+    test "redirects tracked with output", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/start", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("location", "/middle")
+        |> Plug.Conn.resp(302, "redirecting")
+      end)
+
+      Bypass.expect_once(bypass, "GET", "/middle", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("location", "/final")
+        |> Plug.Conn.resp(302, "redirecting again")
+      end)
+
+      final_content = "final destination body"
+
+      Bypass.expect_once(bypass, "GET", "/final", fn conn ->
+        Plug.Conn.resp(conn, 200, final_content)
+      end)
+
+      output_path = Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
+
+      on_exit(fn -> File.rm(output_path) end)
+
+      assert {:ok, %BrowseyHttp.Response{} = resp} =
+               BrowseyHttp.get("#{url}/start", output: output_path)
+
+      assert resp.status == 200
+      assert resp.body == ""
+      assert File.read!(output_path) == final_content
+
+      assert resp.uri_sequence == [
+               URI.parse("#{url}/start"),
+               URI.parse("#{url}/middle"),
+               URI.parse("#{url}/final")
+             ]
+    end
+  end
+
   describe "default_browser/1" do
     test "defaults to Chrome" do
       assert BrowseyHttp.default_browser("https://www.example.com") == :chrome

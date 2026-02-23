@@ -526,7 +526,13 @@ defmodule BrowseyHttpTest do
       paths = Enum.map(uris, & &1.path)
 
       assert Enum.sort(paths) ==
-               Enum.sort(["/", "/favicon.ico", "/dir/app.css", "/javascript.js", "/img/image.png"])
+               Enum.sort([
+                 "/",
+                 "/favicon.ico",
+                 "/dir/app.css",
+                 "/javascript.js",
+                 "/img/image.png"
+               ])
 
       assert Enum.all?(responses, &(&1.status == 200))
 
@@ -613,7 +619,13 @@ defmodule BrowseyHttpTest do
       response_paths = Enum.map(responses, & &1.final_uri.path)
 
       assert Enum.sort(response_paths) ==
-               Enum.sort(["/", "/dir/app.css", "/javascript.js", "/img/image.png", "/favicon.png"])
+               Enum.sort([
+                 "/",
+                 "/dir/app.css",
+                 "/javascript.js",
+                 "/img/image.png",
+                 "/favicon.png"
+               ])
     end
 
     test "handles failure to get the initial page" do
@@ -731,7 +743,8 @@ defmodule BrowseyHttpTest do
         Plug.Conn.resp(conn, 200, content)
       end)
 
-      output_path = Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
+      output_path =
+        Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
 
       on_exit(fn -> File.rm(output_path) end)
 
@@ -750,7 +763,8 @@ defmodule BrowseyHttpTest do
         |> Plug.Conn.resp(201, "created content")
       end)
 
-      output_path = Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
+      output_path =
+        Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
 
       on_exit(fn -> File.rm(output_path) end)
 
@@ -781,7 +795,8 @@ defmodule BrowseyHttpTest do
         Plug.Conn.resp(conn, 200, final_content)
       end)
 
-      output_path = Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
+      output_path =
+        Path.join(System.tmp_dir!(), "browsey_output_test_#{System.unique_integer([:positive])}")
 
       on_exit(fn -> File.rm(output_path) end)
 

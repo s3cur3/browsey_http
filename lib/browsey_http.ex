@@ -282,7 +282,7 @@ defmodule BrowseyHttp do
     # TODO: Support opts[:additional_headers]
     # Someday We could use the `:into` argument to stream and parse the request as it goes...
 
-    timeout = Access.get(opts, :timeout, :timer.seconds(30))
+    timeout = Access.get(opts, :timeout, to_timeout(second: 30))
     max_bytes = Access.get(opts, :max_response_size_bytes, @max_response_size_bytes)
     output_path = Access.get(opts, :output)
 
@@ -428,7 +428,7 @@ defmodule BrowseyHttp do
         |> Task.async_stream(fetch,
           max_concurrency: min(4, System.schedulers_online()),
           ordered: false,
-          timeout: MapSet.size(uris_to_fetch) * :timer.minutes(1),
+          timeout: MapSet.size(uris_to_fetch) * to_timeout(minute: 1),
           on_timeout: :kill_task
         )
         |> Stream.filter(&match?({:ok, _}, &1))
@@ -471,6 +471,6 @@ defmodule BrowseyHttp do
     defp retry_delay_slow(retry_count), do: 1 + retry_count
   else
     # Exponential backoff starting at 4 seconds, then 8, 16, etc.
-    defp retry_delay_slow(retry_count), do: :timer.seconds(2 ** (3 + retry_count))
+    defp retry_delay_slow(retry_count), do: to_timeout(second: 2 ** (3 + retry_count))
   end
 end

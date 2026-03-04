@@ -10,18 +10,10 @@ defmodule BrowseyHttp.Util.Exec do
   def exec(command, timeout) do
     opts = [:sync, :stdout, :stderr]
 
-    full_command =
-      if timeout == :infinity do
-        command
-      else
-        # exec just straight up ignores the timeout argument they purport to support. :(
-        "timeout #{ceil(timeout / 1_000)}s #{command}"
-      end
-
     if dockerexec_loaded?() do
-      :dockerexec.run(full_command, opts, timeout)
+      :dockerexec.run(command, opts, timeout)
     else
-      apply(:exec, :run, [full_command, opts, timeout])
+      apply(:exec, :run, [command, opts, timeout])
     end
   end
 

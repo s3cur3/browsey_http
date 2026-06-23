@@ -81,7 +81,7 @@ defmodule BrowseyHttp.MixProject do
     [
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:domainatrex, "~> 3.0"},
-      {:dockerexec, "~> 2.0", optional: true},
+      {:dockerexec, "~> 2.0.4", optional: true},
       {:floki, ">= 0.30.0"},
       # Faster HTML parser for Floki written in Rust
       # I'm getting a NIF panic using it... see Html5ever in config.exs.
